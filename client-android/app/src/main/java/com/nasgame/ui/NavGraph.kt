@@ -13,6 +13,7 @@ object Routes {
     const val LIBRARY = "library"
     const val DETAIL = "detail/{id}"
     const val SETTINGS = "settings"
+    const val DOWNLOADS = "downloads"
     const val STREAM = "stream/{id}"
 
     fun detail(id: Long) = "detail/$id"
@@ -32,6 +33,7 @@ fun NavGraph(nav: NavHostController) {
             LibraryScreen(
                 onOpenDetail = { nav.navigate(Routes.detail(it)) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenDownloads = { nav.navigate(Routes.DOWNLOADS) },
             )
         }
         composable(Routes.DETAIL) { entry ->
@@ -44,6 +46,9 @@ fun NavGraph(nav: NavHostController) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.DOWNLOADS) {
+            DownloadsScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.STREAM) { entry ->
             val id = entry.arguments?.getString("id")?.toLongOrNull() ?: 0L

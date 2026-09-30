@@ -12,7 +12,6 @@ on:
       - '.github/workflows/android.yml'
   workflow_dispatch:
 
-# Allow one concurrent build (CI runners are shared)
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: false
@@ -33,13 +32,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 自动生成 gradle wrapper (项目里没带 wrapper jar)
-      - name: Setup Gradle (auto-bootstrap wrapper)
+      # gradle/actions/setup-gradle 不会自动生成 wrapper jar. 我们手动 gradle wrapper.
+      - name: Generate Gradle Wrapper
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-          cache-disabled: false
-          add-job-summary: always
+
+      - name: Bootstrap gradle wrapper
+        working-directory: client-android
+        run: gradle wrapper --gradle-version 8.7 --distribution-type bin
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('client-android/**/*.gradle*', 'client-android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -67,6 +78,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Bootstrap gradle wrapper
+        working-directory: client-android
+        run: gradle wrapper --gradle-version 8.7 --distribution-type bin
       - name: Run Lint
         run: ./gradlew lintDebug --no-daemon
         working-directory: client-android

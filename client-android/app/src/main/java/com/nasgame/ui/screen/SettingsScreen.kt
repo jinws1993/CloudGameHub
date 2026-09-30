@@ -80,15 +80,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun resetRomToDefault() {
+    fun resetRomToDefault(ctx: android.content.Context) {
         viewModelScope.launch {
-            // 释放旧 SAF 权限 (如果有)
-            val oldUri = prefs.romStorageSafUri()
-            if (oldUri != null) {
+            // 释放旧 SAF 权限 (如果有), 避免 persistable 配额被占满
+            val oldUriStr = prefs.romStorageSafUri()
+            if (oldUriStr != null) {
                 try {
-                    SafFileHelper.releaseTreePermission(
-                        // 我们需要在 ViewModel 里拿 Context. 简化: 跳过 release, 系统会在 uninstall 时清
-                    )
+                    SafFileHelper.releaseTreePermission(ctx, android.net.Uri.parse(oldUriStr))
                 } catch (_: Exception) {}
             }
             prefs.resetToDefault()
@@ -221,7 +219,7 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
                         }
                         Spacer(Modifier.width(8.dp))
                         OutlinedButton(
-                            onClick = { vm.resetRomToDefault() },
+                            onClick = { vm.resetRomToDefault(ctx) },
                             modifier = Modifier.weight(1f),
                         ) { Text("恢复默认") }
                     }

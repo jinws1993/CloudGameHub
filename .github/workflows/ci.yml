@@ -1,0 +1,98 @@
+# ============================================================
+# GitHub Actions: CI 检查 (语法 + smoke test)
+# ============================================================
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    name: Python + JS syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install -r server/requirements.txt
+
+      - name: Python syntax check (server/app/*.py)
+        run: |
+          python3 -m compileall -q server/app/ || exit 1
+          echo "✓ All Python files compile"
+
+      - name: Python ast parse (strict)
+        run: |
+          python3 -c "
+          import ast, glob
+          for f in glob.glob('server/app/*.py'):
+              with open(f) as fh:
+                  ast.parse(fh.read())
+          print('✓ All Python files parse')
+          "
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JS syntax check (app.js)
+        run: |
+          node -e "new Function(require('fs').readFileSync('server/web/static/app.js','utf8')); console.log('✓ app.js parses')"
+
+      - name: JSON syntax check
+        run: |
+          python3 -c "
+          import json
+          json.load(open('.env.example'))
+          print('✓ .env.example parses')
+          "
+
+  secret-scan:
+    name: Secret / personal data scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for AI keys (sk-cp-, ghp_, etc.)
+        run: |
+          # 防止有人误提交带 token 的 commit
+          if grep -rE "sk-cp-[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9]{10,}" --include="*.py" --include="*.js" --include="*.md" --include="*.yml" --include="*.yaml" --include="*.json" --include="*.toml" --include="*.kt" --include="*.txt" .; then
+            echo "❌ Found potential secret, commit rejected"
+            exit 1
+          fi
+          echo "✓ No secrets found"
+
+      - name: Check for 115 cookie pattern
+        run: |
+          if grep -rE "UID=[0-9a-fA-F]{16,}|SEID=[0-9a-fA-F]{16,}|CID=[0-9a-fA-F]{16,}" --include="*.py" --include="*.js" .; then
+            echo "❌ Found 115-like cookie"
+            exit 1
+          fi
+          echo "✓ No cookies found"
+
+      - name: Check for large files (>1MB)
+        run: |
+          python3 -c "
+          import os, glob
+          big = []
+          for f in glob.glob('**/*', recursive=True):
+              if os.path.isfile(f):
+                  size = os.path.getsize(f)
+                  if size > 1048576:
+                      big.append((size, f))
+          if big:
+              for s, f in big:
+                  print(f'  {s/1048576:.2f}MB {f}')
+              raise SystemExit(1)
+          print('✓ No files > 1MB')
+          "

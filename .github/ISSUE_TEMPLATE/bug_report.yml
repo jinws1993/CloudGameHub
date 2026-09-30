@@ -1,0 +1,111 @@
+name: 🐛 Bug Report
+description: 报告 Bug / Report a bug
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮 NasGameHub 改进。请填写以下信息。
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统 / OS
+      description: 部署 NasGameHub 的系统
+      options:
+        - 飞牛 OS (fnOS)
+        - Debian 12
+        - Debian 11
+        - Ubuntu 24.04
+        - Ubuntu 22.04
+        - CentOS Stream 9
+        - 其他 Linux
+        - Windows (WSL2)
+        - macOS
+    validations:
+      required: true
+
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker 版本 / Docker version
+      placeholder: 'docker --version 输出 (e.g. Docker version 24.0.7, build afdd53b)'
+    validations:
+      required: true
+
+  - type: input
+    id: nasgame-version
+    attributes:
+      label: NasGameHub 版本 / Version
+      placeholder: 'docker inspect nasgame | grep org.opencontainers.image.version'
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / What happened?
+      placeholder: '清晰简洁地描述 bug 是什么'
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Reproduction steps
+      placeholder: |
+        1. 进入...
+        2. 点击...
+        3. 看到...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 / Expected behavior
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 关键日志 / Relevant logs
+      placeholder: |
+        ```
+        docker logs nasgame --tail=200
+        ```
+        浏览器开发者工具 → Console 错误信息
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / Screenshots
+    validations:
+      required: false
+
+  - type: dropdown
+    id: ai-enabled
+    attributes:
+      label: AI 识别是否启用 / AI enabled?
+      options:
+        - 是
+        - 否
+        - 不确定
+    validations:
+      required: false
+
+  - type: dropdown
+    id: ss-enabled
+    attributes:
+      label: ScreenScraper 凭据是否配置 / SS configured?
+      options:
+        - 是
+        - 否
+    validations:
+      required: false

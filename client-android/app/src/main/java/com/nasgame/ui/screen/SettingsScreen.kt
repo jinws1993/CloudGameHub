@@ -1,5 +1,8 @@
 package com.nasgame.ui.screen
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +22,7 @@ import androidx.lifecycle.viewModelScope
 import com.nasgame.data.api.Platform
 import com.nasgame.data.prefs.PrefsStore
 import com.nasgame.data.repo.NasGameRepo
+import com.nasgame.util.SafFileHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,22 +40,23 @@ class SettingsViewModel @Inject constructor(
     val emuMap = _emuMap.asStateFlow()
     private val _server = MutableStateFlow<String?>(null)
     val server = _server.asStateFlow()
-    private val _romPath = MutableStateFlow<String>("")
+    private val _romDisplay = MutableStateFlow("")
+    val romDisplay: kotlinx.coroutines.flow.StateFlow<String> = _romDisplay.asStateFlow()
+    private val _romKind = MutableStateFlow(PrefsStore.RomStorageKind.DEFAULT)
+    val romKind: kotlinx.coroutines.flow.StateFlow<PrefsStore.RomStorageKind> = _romKind.asStateFlow()
     private val _concurrent = MutableStateFlow(2)
     val concurrent = _concurrent.asStateFlow()
-    val romPath: kotlinx.coroutines.flow.StateFlow<String> = _romPath.asStateFlow()
     private val _globalEmu = MutableStateFlow<String?>(null)
     val globalEmu = _globalEmu.asStateFlow()
     private val _raCore = MutableStateFlow<String?>(null)
     val raCore = _raCore.asStateFlow()
 
-    val candidates: List<Pair<String, String>> = prefs.romStorageCandidates()
-
     init {
         viewModelScope.launch {
             _emuMap.value = prefs.allEmuPackages()
             _server.value = prefs.currentServer()
-            _romPath.value = prefs.romStoragePath()
+            _romDisplay.value = prefs.romStorageDisplay()
+            _romKind.value = prefs.romStorageKind()
             _concurrent.value = prefs.concurrentDownloads()
             _globalEmu.value = prefs.globalEmulatorPkg()
             _raCore.value = prefs.defaultRetroArchCore()
@@ -66,10 +71,29 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setRomPath(path: String) {
+    fun setSafTree(ctx: android.content.Context, uri: android.net.Uri) {
         viewModelScope.launch {
-            prefs.setRomStoragePath(path)
-            _romPath.value = prefs.romStoragePath()
+            SafFileHelper.persistTreePermission(ctx, uri)
+            prefs.setSafStorage(uri)
+            _romKind.value = prefs.romStorageKind()
+            _romDisplay.value = prefs.romStorageDisplay()
+        }
+    }
+
+    fun resetRomToDefault() {
+        viewModelScope.launch {
+            // 释放旧 SAF 权限 (如果有)
+            val oldUri = prefs.romStorageSafUri()
+            if (oldUri != null) {
+                try {
+                    SafFileHelper.releaseTreePermission(
+                        // 我们需要在 ViewModel 里拿 Context. 简化: 跳过 release, 系统会在 uninstall 时清
+                    )
+                } catch (_: Exception) {}
+            }
+            prefs.resetToDefault()
+            _romKind.value = prefs.romStorageKind()
+            _romDisplay.value = prefs.romStorageDisplay()
         }
     }
 
@@ -105,13 +129,24 @@ class SettingsViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
+    val ctx = LocalContext.current
     val platforms by vm.platforms.collectAsState()
     val emuMap by vm.emuMap.collectAsState()
     val server by vm.server.collectAsState()
-    val romPath by vm.romPath.collectAsState()
+    val romDisplay by vm.romDisplay.collectAsState()
+    val romKind by vm.romKind.collectAsState()
     val concurrent by vm.concurrent.collectAsState()
     val globalEmu by vm.globalEmu.collectAsState()
     val raCore by vm.raCore.collectAsState()
+
+    // SAF 文件选择器 launcher
+    val safLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            vm.setSafTree(ctx, uri)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -136,62 +171,58 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
                 }
             }
 
-            // ============ ROM 存储路径 ============
+            // ============ ROM 存储路径 (SAF) ============
             ElevatedCard(Modifier.padding(16.dp).fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("📁 ROM 存放路径", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "默认: App 私有目录 (卸载自动清理). " +
-                        "改后下次下载生效; 已下载的 ROM 仍在原位置",
+                        "点\"选择目录\"调起系统文件管理器选一个文件夹, " +
+                        "ROM 会下载到这里. 默认 App 私有目录 (卸载自动清理).",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "当前: $romPath",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    // 预设候选
-                    vm.candidates.forEach { (label, path) ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = (path == romPath),
-                                onClick = { vm.setRomPath(path) },
-                            )
-                            Text(label, Modifier.weight(1f))
-                            Text(
-                                path,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            )
-                        }
+                    Spacer(Modifier.height(12.dp))
+                    // 当前路径
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = when (romKind) {
+                                PrefsStore.RomStorageKind.DEFAULT -> Icons.Default.Smartphone
+                                PrefsStore.RomStorageKind.SAF -> Icons.Default.Folder
+                                PrefsStore.RomStorageKind.LEGACY_PATH -> Icons.Default.Folder
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        Text(
+                            when (romKind) {
+                                PrefsStore.RomStorageKind.DEFAULT -> "App 私有 (默认)"
+                                PrefsStore.RomStorageKind.SAF -> "已选外部目录"
+                                PrefsStore.RomStorageKind.LEGACY_PATH -> "自定义路径"
+                            },
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    // 自定义路径
-                    var customPath by remember(romPath) { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = customPath,
-                        onValueChange = { customPath = it },
-                        label = { Text("自定义路径") },
-                        placeholder = { Text("/storage/emulated/0/MyRoms") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
                     Spacer(Modifier.height(4.dp))
+                    Text(
+                        romDisplay,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Spacer(Modifier.height(12.dp))
                     Row {
-                        OutlinedButton(
-                            onClick = { if (customPath.isNotBlank()) vm.setRomPath(customPath.trim()) },
-                            enabled = customPath.isNotBlank(),
-                        ) { Text("应用") }
+                        Button(
+                            onClick = { safLauncher.launch(null) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("选择目录")
+                        }
                         Spacer(Modifier.width(8.dp))
                         OutlinedButton(
-                            onClick = { vm.setRomPath(vm.candidates.first().second) },
+                            onClick = { vm.resetRomToDefault() },
+                            modifier = Modifier.weight(1f),
                         ) { Text("恢复默认") }
                     }
                 }

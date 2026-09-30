@@ -1,7 +1,7 @@
 package com.nasgame.data.prefs
 
 import android.content.Context
-import android.os.Environment
+import android.net.Uri
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,7 +21,14 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
     private val USER = stringPreferencesKey("username")
     private val EMU_PREFIX = "emu_pkg_"
     private val CONCURRENT_DOWNLOADS = intPreferencesKey("concurrent_downloads")
-    private val ROM_STORAGE_PATH = stringPreferencesKey("rom_storage_path")
+    /** ROM 存储路径 — 两种形式:
+     *  - "default" → 默认 App 私有目录
+     *  - "saf:<uri>" → 用户通过 SAF 选择的目录 (Uri encoded)
+     *  - "path:/storage/emulated/0/MyRoms" → 旧的手填绝对路径 (legacy)
+     */
+    private val ROM_STORAGE_KIND = stringPreferencesKey("rom_storage_kind")
+    private val ROM_STORAGE_SAF_URI = stringPreferencesKey("rom_storage_saf_uri")
+    private val ROM_STORAGE_LEGACY_PATH = stringPreferencesKey("rom_storage_legacy_path")
     private val GLOBAL_EMULATOR_PKG = stringPreferencesKey("global_emulator_pkg")
     private val DEFAULT_RETROARCH_CORE = stringPreferencesKey("default_retroarch_core")
 
@@ -60,7 +67,7 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
             .associate { it.key.name.removePrefix(EMU_PREFIX) to (it.value as String) }
     }
 
-    /** 最大并发下载数 (默认 2, ROM 文件大, NAS/手机带宽压力) */
+    /** 最大并发下载数 (默认 2) */
     suspend fun concurrentDownloads(): Int =
         ctx.dataStore.data.first()[CONCURRENT_DOWNLOADS] ?: 2
 
@@ -68,37 +75,84 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
         ctx.dataStore.edit { it[CONCURRENT_DOWNLOADS] = n }
     }
 
+    // ============ ROM 存储路径 (SAF 模式) ============
+
+    enum class RomStorageKind { DEFAULT, SAF, LEGACY_PATH }
+
+    /** 当前的 ROM 存储方式 */
+    suspend fun romStorageKind(): RomStorageKind {
+        val v = ctx.dataStore.data.first()[ROM_STORAGE_KIND] ?: RomStorageKind.DEFAULT.name
+        return runCatching { RomStorageKind.valueOf(v) }.getOrDefault(RomStorageKind.DEFAULT)
+    }
+
+    /** 设置为 SAF (用户选目录) */
+    suspend fun setSafStorage(uri: Uri) {
+        ctx.dataStore.edit {
+            it[ROM_STORAGE_KIND] = RomStorageKind.SAF.name
+            it[ROM_STORAGE_SAF_URI] = uri.toString()
+        }
+    }
+
+    /** 设置为 legacy path (兼容老配置) */
+    suspend fun setLegacyPath(path: String) {
+        ctx.dataStore.edit {
+            it[ROM_STORAGE_KIND] = RomStorageKind.LEGACY_PATH.name
+            it[ROM_STORAGE_LEGACY_PATH] = path
+        }
+    }
+
+    /** 重置为默认 */
+    suspend fun resetToDefault() {
+        ctx.dataStore.edit {
+            it[ROM_STORAGE_KIND] = RomStorageKind.DEFAULT.name
+            it.remove(ROM_STORAGE_SAF_URI)
+            it.remove(ROM_STORAGE_LEGACY_PATH)
+        }
+    }
+
+    /** SAF 选中的目录 URI (字符串) */
+    suspend fun romStorageSafUri(): String? =
+        ctx.dataStore.data.first()[ROM_STORAGE_SAF_URI]
+
+    /** Legacy 路径 */
+    suspend fun romStorageLegacyPath(): String? =
+        ctx.dataStore.data.first()[ROM_STORAGE_LEGACY_PATH]
+
     /**
-     * ROM 存放根路径.
-     * 默认: <app-external>/roms (卸载 App 自动清理)
-     * 用户可改成: 外置 SD 卡 / 自定义目录
+     * 当前 ROM 存储的"显示描述" (用于 UI).
+     * - DEFAULT → "<app-external>/roms (卸载自动清理)"
+     * - SAF → 友好的树路径 (从 Uri 推断)
+     * - LEGACY_PATH → 原始路径
      */
-    suspend fun romStoragePath(): String {
-        return ctx.dataStore.data.first()[ROM_STORAGE_PATH]
-            ?: defaultRomStoragePath()
+    suspend fun romStorageDisplay(): String = when (romStorageKind()) {
+        RomStorageKind.DEFAULT -> "默认 (App 私有): ${defaultRomStoragePath()}"
+        RomStorageKind.SAF -> romStorageSafUri()?.let { humanizeSafUri(it) }
+            ?: "未知 SAF 目录"
+        RomStorageKind.LEGACY_PATH -> romStorageLegacyPath() ?: "(未知)"
     }
 
-    suspend fun setRomStoragePath(path: String) {
-        ctx.dataStore.edit { it[ROM_STORAGE_PATH] = path }
-    }
-
-    /** 默认 ROM 存储路径 (App 私有 external) */
+    /** 默认 ROM 存储根路径 (App 私有 external — 卸载自动清理) */
     fun defaultRomStoragePath(): String {
         val ext = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         return ext.absolutePath + "/roms"
     }
 
-    /** 列出可选的 ROM 存储路径候选 */
-    fun romStorageCandidates(): List<Pair<String, String>> {
-        val candidates = mutableListOf<Pair<String, String>>()
-        // 默认 (App 私有 external — 卸载自动清理)
-        candidates += "默认 (App 私有)" to defaultRomStoragePath()
-        // 主存储公共目录 (需 WRITE_EXTERNAL_STORAGE, 但 Android 11+ 用 SAF 才行)
-        try {
-            val pub = Environment.getExternalStorageDirectory().absolutePath + "/NasGameRoms"
-            candidates += "公共存储" to pub
-        } catch (_: Exception) {}
-        return candidates
+    /** 把 SAF Uri 转成人能看懂的描述 (e.g. "主存储/Download/MyRoms") */
+    private fun humanizeSafUri(uriStr: String): String {
+        // tree/primary:Documents/MyRoms → "主存储/Documents/MyRoms"
+        // tree/XXXX-XXXX:Downloads/sub → "SD卡/Downloads/sub"
+        return try {
+            val uri = Uri.parse(uriStr)
+            val path = uri.path?.removePrefix("/tree/")?.replace(":", "/") ?: uri.toString()
+            // 找 primary 标识
+            val parts = path.split("/").drop(1) // drop "tree"
+            val isPrimary = path.contains("primary:")
+            val root = if (isPrimary) "主存储" else parts.firstOrNull()?.uppercase() ?: "外部存储"
+            val sub = parts.drop(1).joinToString("/")
+            if (sub.isBlank()) root else "$root/$sub"
+        } catch (_: Exception) {
+            uriStr
+        }
     }
 
     /**
@@ -114,10 +168,7 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
         }
     }
 
-    /**
-     * RetroArch 默认 core (例如 "nestopia_libretro.so" for FC)
-     * 不设置则 RA 会让用户首次启动时选 core
-     */
+    /** RetroArch 默认 core (例如 "nestopia_libretro.so" for FC) */
     suspend fun defaultRetroArchCore(): String? =
         ctx.dataStore.data.first()[DEFAULT_RETROARCH_CORE]
 

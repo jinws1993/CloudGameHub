@@ -42,28 +42,14 @@ object EmulatorLauncher {
         "org.fdroid.retroarch",
     )
 
-    /**
-     * Find the user-configured package or auto-detect one for the platform.
-     *
-     * Priority:
-     * 1. 平台级用户配置 (Settings 里的 emu_pkg_<plat>)
-     * 2. 全局模拟器配置 (Settings 里的 globalEmulatorPkg, 通常是 RetroArch)
-     * 3. 已知 KNOWN_PACKAGES 自动检测
-     */
     fun resolvePackage(
         ctx: Context,
         platformCode: String,
         userPkg: String?,
         globalPkg: String? = null,
     ): String? {
-        // 1. 用户指定 + 用户指定的包已安装
         if (!userPkg.isNullOrBlank() && isInstalled(ctx, userPkg)) return userPkg
-
-        // 2. 全局模拟器
         if (!globalPkg.isNullOrBlank() && isInstalled(ctx, globalPkg)) return globalPkg
-
-        // 3. 平台已知列表
-        val pm = ctx.packageManager
         return KNOWN_PACKAGES[platformCode]?.firstOrNull { isInstalled(ctx, it) }
     }
 
@@ -71,40 +57,21 @@ object EmulatorLauncher {
         ctx.packageManager.getPackageInfo(pkg, 0); true
     } catch (_: PackageManager.NameNotFoundException) { false }
 
-    /**
-     * 是否 RetroArch 包
-     */
     fun isRetroArch(pkg: String): Boolean = pkg in RETROARCH_PACKAGES
 
     /**
      * 启动模拟器.
      *
-     * RetroArch 特殊处理:
-     * - 用 `org.libretro.android.action.LOAD_CONTENT` action (RA 文档推荐)
-     * - 传 `EXTRA_ROM` / `EXTRA_STREAM` 让 RA 加载 content
-     * - 如果配了默认 core, 通过 extra 传 (但 RA 不一定能直接用, 通常用户在 RA 里设)
-     *
-     * 普通模拟器: ACTION_VIEW + content URI + mime type
+     * @param uri ROM 的 Uri (FileProvider 或 SAF 都直接传 Uri 即可)
+     * @param romPath ROM 的可读路径 (e.g. "/storage/emulated/0/..."), 用于 putExtra
      */
     fun launch(
         ctx: Context,
         pkg: String,
+        uri: Uri,
         romPath: String,
         defaultCore: String? = null,
     ): Boolean {
-        val romFile = File(romPath)
-        if (!romFile.exists()) return false
-
-        val uri: Uri = try {
-            FileProvider.getUriForFile(
-                ctx,
-                "${ctx.packageName}.fileprovider",
-                romFile,
-            )
-        } catch (_: Exception) {
-            Uri.fromFile(romFile)
-        }
-
         return if (isRetroArch(pkg)) {
             launchRetroArch(ctx, pkg, uri, romPath, defaultCore)
         } else {
@@ -112,18 +79,24 @@ object EmulatorLauncher {
         }
     }
 
-    /**
-     * RetroArch 启动:
-     * - action: org.libretro.android.action.LOAD_CONTENT (RA 公开 API)
-     * - 一些 RA 旧版需要 EXTRA_ROM=绝对路径, 但新版支持 content:// URI
-     * - 我们同时传 EXTRA_ROM 和 EXTRA_STREAM 提高兼容性
-     */
-    private fun launchRetroArch(
+    /** 兼容旧 API (传 File) */
+    fun launch(
         ctx: Context,
         pkg: String,
-        uri: Uri,
         romPath: String,
-        defaultCore: String?,
+        defaultCore: String? = null,
+    ): Boolean {
+        val romFile = File(romPath)
+        val uri: Uri = try {
+            FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", romFile)
+        } catch (_: Exception) {
+            Uri.fromFile(romFile)
+        }
+        return launch(ctx, pkg, uri, romPath, defaultCore)
+    }
+
+    private fun launchRetroArch(
+        ctx: Context, pkg: String, uri: Uri, romPath: String, defaultCore: String?,
     ): Boolean {
         val intent = Intent("org.libretro.android.action.LOAD_CONTENT").apply {
             setPackage(pkg)
@@ -131,10 +104,9 @@ object EmulatorLauncher {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
             putExtra("ROM", romPath)
             putExtra("romPath", romPath)
-            putExtra("EXTRA_ROM", romPath)        // RA 旧版
+            putExtra("EXTRA_ROM", romPath)
             putExtra("EXTRA_STREAM", uri)
             if (!defaultCore.isNullOrBlank()) {
-                // RA 不一定能从 Intent 指定 core, 但写上不亏
                 putExtra("LIBRETRO_CORE", defaultCore)
                 putExtra("core", defaultCore)
             }
@@ -142,9 +114,6 @@ object EmulatorLauncher {
         return tryStartActivity(ctx, intent, fallbackActionView = uri, romPath = romPath, pkg = pkg)
     }
 
-    /**
-     * 普通模拟器: ACTION_VIEW + content URI
-     */
     private fun launchGeneric(ctx: Context, pkg: String, uri: Uri, romPath: String): Boolean {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mimeForRom(romPath))
@@ -158,17 +127,12 @@ object EmulatorLauncher {
     }
 
     private fun tryStartActivity(
-        ctx: Context,
-        intent: Intent,
-        fallbackActionView: Uri,
-        romPath: String,
-        pkg: String,
+        ctx: Context, intent: Intent, fallbackActionView: Uri, romPath: String, pkg: String,
     ): Boolean {
         return try {
             ctx.startActivity(intent)
             true
         } catch (_: Exception) {
-            // Fallback: 通用 VIEW intent (不带 setPackage, 让用户选择)
             val fallback = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(fallbackActionView, mimeForRom(romPath))
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -177,9 +141,7 @@ object EmulatorLauncher {
             try {
                 ctx.startActivity(Intent.createChooser(fallback, "选择模拟器打开 ROM"))
                 true
-            } catch (_: Exception) {
-                false
-            }
+            } catch (_: Exception) { false }
         }
     }
 

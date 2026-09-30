@@ -1295,10 +1295,11 @@ async def download_rom(gid: int,
     g = await db.get(Game, gid)
     if not g:
         raise HTTPException(404, "game not found")
-    full = settings.roms_dir / g.rom_path
+    # 关键: rom_path 为空或路径不存在都不能当本地 — 避免 115 入库的 game 被误判为 local
+    full = settings.roms_dir / g.rom_path if g.rom_path else None
 
-    # 本地存在 -> 直接下载
-    if full.exists():
+    # 本地存在 (必须是文件, 不是目录) -> 直接下载
+    if full is not None and full.is_file():
         fname = g.rom_filename
 
         async def iterfile():
@@ -1353,9 +1354,13 @@ async def get_rom_info(gid: int,
     g = await db.get(Game, gid)
     if not g:
         raise HTTPException(404, "game not found")
-    full = settings.roms_dir / g.rom_path
+    # 关键: rom_path 为空 (115 入库不下载) 不能当成本地路径, 避免误判成目录
+    if g.rom_path and not (settings.roms_dir / g.rom_path).is_file():
+        # rom_path 写了但文件不存在 — 当作本地不存在, 走云盘
+        pass
+    has_local = bool(g.rom_path) and (settings.roms_dir / g.rom_path).is_file()
 
-    if full.exists():
+    if has_local:
         return {
             "source": "local",
             "url": f"/api/games/{gid}/rom",

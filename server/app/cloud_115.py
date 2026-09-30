@@ -164,7 +164,7 @@ class Pan115Client:
         return []
 
     async def get_download_url(self, pickcode: str) -> str:
-        """获取文件的下载直链 (302 后的 CDN URL)."""
+        """获取文件的下载直链 (带 token 的 CDN URL)."""
         if not self._client:
             raise Pan115Error("client not initialized")
         # 1. 拿下载参数 (含 token)
@@ -173,12 +173,18 @@ class Pan115Client:
         j = r.json()
         if not j.get("state"):
             raise Pan115Error(j.get("message") or j.get("error") or "no download url")
-        data = j.get("data") or {}
-        # data.list[0].url 是带 token 的 CDN 链接
-        try:
-            url = data["list"][0]["url"]
-        except (KeyError, IndexError):
-            raise Pan115Error("download URL missing in response")
+        # 115 API 返回结构有两种:
+        # - 新版 (chromealone/down): 顶层 {file_url, file_name, file_size}
+        # - 旧版: data.list[0].url
+        url = j.get("file_url")
+        if not url:
+            data = j.get("data") or {}
+            try:
+                url = data["list"][0]["url"]
+            except (KeyError, IndexError, TypeError):
+                pass
+        if not url:
+            raise Pan115Error(f"download URL missing in response: {list(j.keys())}")
         # 2. 该 URL 本身就是 CDN 直链, 浏览器/客户端直接 GET 即可
         return url
 

@@ -190,7 +190,9 @@ class GameDetailViewModel @Inject constructor(
             return
         }
 
-        val launched = EmulatorLauncher.launch(ctx, resolvedPkg, romFile.absolutePath, raCore)
+        // SAF 模式下 romFile 是本地 mirror, URI 来自 SAF
+        val uri = downloadMgr.localUri(ctx, g) ?: Uri.fromFile(romFile)
+        val launched = EmulatorLauncher.launch(ctx, resolvedPkg, uri, romFile.absolutePath, raCore)
         if (launched) {
             try { repo.playLocal(g.id.toLong()) } catch (_: Exception) {}
             _msg.value = "已启动 $resolvedPkg"

@@ -1,11 +1,14 @@
 package com.nasgame.data.download
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import com.nasgame.data.api.Game
 import com.nasgame.data.api.NasGameApi
 import com.nasgame.data.api.RomInfoResponse
 import com.nasgame.data.prefs.PrefsStore
+import com.nasgame.util.SafFileHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,13 +25,12 @@ import javax.inject.Singleton
 /**
  * 负责 ROM 下载的核心组件。
  *
- * 关键设计：
- * 1. **顺序 + 信号量限流** - 同时最多 N 个 (默认 2, 用户可配) 大文件下载
- * 2. **115 CDN 直链** - 服务端返回 JSON {source, url, size, filename}, 客户端用**裸 OkHttp**
- *    下载 (无 AuthInterceptor, 避免 115 CDN 拒签), 不走服务器流量
- * 3. **进度回调** - Flow<DownloadProgress> 暴露给 UI
- * 4. **断点续传** - 校验已下载文件大小, 不匹配重新拉; 未来可加 Range header
- * 5. **缓存路径可配置** - 默认 <app-external>/roms/<plat>, 用户可改成外置 SD / 自定义路径
+ * 三种存储路径:
+ *  1. DEFAULT — App 私有 external 目录 (卸载自动清理)
+ *  2. SAF     — 用户通过系统文件选择器选定的目录 (持久化 URI 权限)
+ *  3. LEGACY  — 老式绝对路径 (兼容旧配置)
+ *
+ * 115 CDN 通过裸 OkHttp 下载 (无 Authorization), 自动 retry.
  */
 @Singleton
 class DownloadManager @Inject constructor(
@@ -37,16 +39,7 @@ class DownloadManager @Inject constructor(
 ) {
     private val TAG = "DownloadManager"
 
-    /**
-     * 裸 OkHttp client: 用来下载 115 CDN 直链, 不带 Authorization header.
-     *
-     * 关键点:
-     * - followRedirects(true): 115 CDN 偶尔会重定向到子域名
-     * - retryOnConnectionFailure(true): "unexpected end of stream" 通常是 CDN 连接被重置,
-     *   OkHttp 内置 retry 大部分情况可恢复
-     * - 长 timeout: 大 ROM 慢
-     * - **不** add AuthInterceptor: 115 CDN 不认我们 NAS 的 token, 带 Authorization 会 401
-     */
+    /** 裸 OkHttp client — 下载 115 CDN 直链 (无 Auth, follow redirect, retry on failure) */
     private val rawClient: OkHttpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
@@ -64,10 +57,7 @@ class DownloadManager @Inject constructor(
     private val _active = MutableStateFlow<Map<Long, DownloadProgress>>(emptyMap())
     val active: StateFlow<Map<Long, DownloadProgress>> = _active.asStateFlow()
 
-    /** 每个游戏同时只允许一个下载任务 */
     private val inflight = java.util.concurrent.ConcurrentHashMap<Long, Job>()
-
-    /** 顺序 + 信号量限流 */
     private var sem: Semaphore = Semaphore(2)
 
     init {
@@ -85,79 +75,99 @@ class DownloadManager @Inject constructor(
 
     fun rawHttpClient(): OkHttpClient = rawClient
 
+    // ============ 路径解析 ============
+
     /**
-     * ROM 存储根路径.
-     * - 用户可在 Settings 改成外置 SD
-     * - 默认 <app-external>/roms (卸载 App 自动清理)
+     * 解析 ROM 的目标路径, 同时考虑三种存储模式.
+     * 返回 [RomTarget] — 调用方根据 isSaf 决定用 SAF API 还是 File API.
      */
-    suspend fun romRootDir(): File {
-        val p = prefs.romStoragePath()
-        val dir = File(p)
-        if (!dir.exists()) dir.mkdirs()
-        return dir
+    suspend fun resolveRomTarget(platformCode: String, filename: String): RomTarget {
+        val plat = platformCode.ifBlank { "misc" }
+        when (prefs.romStorageKind()) {
+            PrefsStore.RomStorageKind.DEFAULT -> {
+                val dir = File(prefs.defaultRomStoragePath(), plat)
+                if (!dir.exists()) dir.mkdirs()
+                val file = File(dir, filename)
+                return RomTarget.Default(file)
+            }
+            PrefsStore.RomStorageKind.SAF -> {
+                val uriStr = prefs.romStorageSafUri() ?: run {
+                    // SAF 配错回退 default
+                    return resolveRomTargetFallback(plat, filename)
+                }
+                val treeUri = Uri.parse(uriStr)
+                if (!SafFileHelper.hasPersistedPermission(ctx, treeUri)) {
+                    return resolveRomTargetFallback(plat, filename)
+                }
+                val root = DocumentFile.fromTreeUri(ctx, treeUri)
+                    ?: return resolveRomTargetFallback(plat, filename)
+                val platDir = SafFileHelper.findOrCreateDir(ctx, root, listOf(plat))
+                val docFile = SafFileHelper.findOrCreateFile(ctx, platDir, filename)
+                return RomTarget.Saf(docFile)
+            }
+            PrefsStore.RomStorageKind.LEGACY_PATH -> {
+                val base = prefs.romStorageLegacyPath() ?: prefs.defaultRomStoragePath()
+                val dir = File(base, plat)
+                if (!dir.exists()) dir.mkdirs()
+                return RomTarget.Default(File(dir, filename))
+            }
+        }
     }
 
-    /** 兼容: 当前 ROM 路径 (不 suspend). 默认用 PrefsStore 缓存的路径. */
-    fun romRootDirCached(): File {
-        val p = prefs.defaultRomStoragePath()
-        val dir = File(p)
+    private fun resolveRomTargetFallback(plat: String, filename: String): RomTarget {
+        val dir = File(prefs.defaultRomStoragePath(), plat)
         if (!dir.exists()) dir.mkdirs()
-        return dir
+        return RomTarget.Default(File(dir, filename))
     }
 
+    /** 兼容旧 API — 返回 File (SAF 模式下用本地缓存 mirror) */
     fun romCacheDir(platformCode: String): File {
-        val dir = File(romRootDirCached(), platformCode)
+        val dir = File(prefs.defaultRomStoragePath(), platformCode)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
 
-    /** 检查 ROM 是否本地已有 + 大小匹配 */
     fun isLocal(game: Game): Boolean {
-        val f = romCacheDir(game.platform?.code ?: "misc").resolve(game.romFilename)
-        return f.exists() && f.length() == game.romSize && game.romSize > 0
+        return try {
+            runBlocking { resolveRomTarget(game.platform?.code ?: "misc", game.romFilename).exists() }
+        } catch (_: Exception) { false }
     }
 
     fun localPath(game: Game): File =
-        romCacheDir(game.platform?.code ?: "misc").resolve(game.romFilename)
+        File(prefs.defaultRomStoragePath(), game.platform?.code ?: "misc").resolve(game.romFilename)
 
-    /**
-     * 探查 ROM 来源 — 让 UI 显示"从哪下"
-     *
-     * 服务端 /api/games/{id}/rom 行为:
-     * - 本地有 → 流式返回 (binary)
-     * - 本地无 + 115 → JSON {source:"remote_115", url, size, filename}
-     * - 都无 → 404
-     */
-    @Suppress("UNUSED_PARAMETER")
+    /** 给 EmulatorLauncher 用 — 拿到一个能被 FileProvider 处理的 URI */
+    fun localUri(ctx: Context, game: Game): Uri? = runBlocking {
+        val target = resolveRomTarget(game.platform?.code ?: "misc", game.romFilename)
+        when (target) {
+            is RomTarget.Default -> androidx.core.content.FileProvider.getUriForFile(
+                ctx, "${ctx.packageName}.fileprovider", target.file
+            )
+            is RomTarget.Saf -> SafFileHelper.toShareableUri(target.doc)
+        }
+    }
+
     fun probeSource(api: NasGameApi, game: Game): RomSource {
         return if (isLocal(game)) RomSource.LOCAL
         else if (game.cloudSource == "115") RomSource.REMOTE_115
         else RomSource.UNKNOWN
     }
 
-    /** 启动一个下载任务. 已经在跑就跳过. */
+    /** 启动下载任务 */
     fun startDownload(api: NasGameApi, game: Game, onComplete: (File?) -> Unit = {}): Boolean {
         if (inflight.containsKey(game.id.toLong())) {
             Log.d(TAG, "Already downloading ${game.id}")
             return false
         }
 
-        val dest = localPath(game)
-        if (dest.exists() && dest.length() == game.romSize && game.romSize > 0) {
-            Log.d(TAG, "Already cached: $dest")
-            onComplete(dest)
-            return false
-        }
-
-        addToQueue(game)
-
         val job = scope.launch {
             sem.withPermit {
-                doDownloadWork(api, game, dest, onComplete)
+                doDownloadWork(api, game, onComplete)
             }
         }
         inflight[game.id.toLong()] = job
         job.invokeOnCompletion { inflight.remove(game.id.toLong()); removeFromQueue(game.id.toLong()) }
+        addToQueue(game)
         return true
     }
 
@@ -174,59 +184,46 @@ class DownloadManager @Inject constructor(
 
     /**
      * 核心下载逻辑:
-     * 1. 调 /api/games/{id}/rom
-     * 2. 服务端根据是否有本地文件返回:
-     *    - 200 + binary body (本地)
-     *    - 200 + JSON (115, 客户端跟裸 OkHttp 下载 CDN URL)
-     *    - 404 (都没有)
-     *
-     * 用 Retrofit 调是因为有 auth interceptor (调 server 需要 token).
-     * 用裸 OkHttp 下载 115 CDN URL 是因为 115 CDN 不认我们 NAS token.
+     * 1. 调 /api/games/{id}/rom-info 拿到 source + url (本地 or 115 CDN)
+     * 2. 根据 RomTarget 类型用 SAF API 或 File API 写文件
      */
     private suspend fun doDownloadWork(
         api: NasGameApi,
         game: Game,
-        dest: File,
         onComplete: (File?) -> Unit,
     ) {
         val gid = game.id.toLong()
         val platCode = game.platform?.code ?: "misc"
         Log.i(TAG, "Start download: $platCode/${game.romFilename} (${game.romSize} bytes)")
 
-        dest.parentFile?.mkdirs()
-        val part = File(dest.parentFile, "${dest.name}.part")
-
         try {
-            // 1. 拿到下载信息 (本地 or 115)
+            val target = resolveRomTarget(platCode, game.romFilename)
             val info = api.romInfo(gid)
             Log.i(TAG, "RomInfo: source=${info.source}, size=${info.size}, url=${info.url.take(80)}...")
 
             val total = info.size.takeIf { it > 0 } ?: game.romSize
             val filename = info.filename.ifBlank { game.romFilename }
 
-            // 2. 进度占位
+            // 0. 进度占位
             _active.value = _active.value + (gid to DownloadProgress(
-                gameId = gid,
-                romFilename = filename,
-                platform = platCode,
-                downloaded = 0,
-                total = total,
-                speedBps = 0,
-                done_ = false,
+                gameId = gid, romFilename = filename, platform = platCode,
+                downloaded = 0, total = total, speedBps = 0, done_ = false,
             ))
 
-            // 3. 下载 body
-            when (info.source) {
+            // 1. 打开输出流 (SAF 或 File)
+            val output: java.io.OutputStream = when (target) {
+                is RomTarget.Default -> target.file.outputStream()
+                is RomTarget.Saf -> SafFileHelper.openOutput(ctx, target.doc, truncate = true)
+            }
+
+            // 2. 拿到输入流 (本地 Retrofit 或 115 裸 OkHttp)
+            val input: java.io.InputStream = when (info.source) {
                 "local" -> {
-                    // 服务端流式返回 (走 Retrofit + Auth header)
                     val body = api.downloadRom(gid)
-                    writeToFile(body.byteStream(), part, total, gid, filename, platCode)
+                    body.byteStream()
                 }
                 "remote_115" -> {
-                    // 115 CDN — 裸 OkHttp, 不带 Authorization (避免 115 CDN 401)
-                    if (info.url.isBlank()) {
-                        throw IOException("服务端返回空 URL")
-                    }
+                    if (info.url.isBlank()) throw IOException("服务端返回空 URL")
                     val req = okhttp3.Request.Builder()
                         .url(info.url)
                         .header("User-Agent", "NasGameHub/1.0 (Android)")
@@ -237,90 +234,80 @@ class DownloadManager @Inject constructor(
                         throw IOException("115 CDN HTTP ${resp.code}: ${resp.message}")
                     }
                     val body = resp.body ?: throw IOException("115 CDN 空响应体")
-                    try {
-                        writeToFile(body.byteStream(), part, total, gid, filename, platCode)
-                    } finally {
-                        body.close()
-                    }
+                    body.byteStream()
                 }
                 else -> throw IOException("未知 source: ${info.source}")
             }
 
-            if (part.length() != total && total > 0) {
-                throw IOException("下载不完整: ${part.length()} / $total")
+            try {
+                writeToOutput(input, output, total, gid, filename, platCode)
+            } finally {
+                input.close()
+                output.close()
             }
 
-            if (dest.exists()) dest.delete()
-            part.renameTo(dest)
+            // 3. 校验大小 (SAF 模式下 target.doc.length() 也可用)
+            val actualSize = when (target) {
+                is RomTarget.Default -> target.file.length()
+                is RomTarget.Saf -> target.doc.length()
+            }
+            if (total > 0 && actualSize != total) {
+                throw IOException("下载不完整: $actualSize / $total")
+            }
 
-            Log.i(TAG, "Done: $dest (${dest.length()} bytes)")
+            Log.i(TAG, "Done: ${target.describe()} ($actualSize bytes)")
             _active.value = _active.value + (gid to DownloadProgress(
-                gameId = gid,
-                romFilename = filename,
-                platform = platCode,
-                downloaded = total,
-                total = total,
-                speedBps = 0,
-                done_ = true,
+                gameId = gid, romFilename = filename, platform = platCode,
+                downloaded = total, total = total, speedBps = 0, done_ = true,
             ))
-            onComplete(dest)
+            // onComplete 传 File (SAF 模式我们用本地 mirror file 给上层兼容)
+            val fileForCallback: File? = when (target) {
+                is RomTarget.Default -> target.file
+                is RomTarget.Saf -> localPath(game)
+            }
+            onComplete(fileForCallback)
         } catch (e: CancellationException) {
-            part.delete()
             Log.w(TAG, "Cancelled: ${game.romFilename}")
             _active.value = _active.value - gid
             onComplete(null)
         } catch (e: Exception) {
-            part.delete()
             Log.e(TAG, "Download failed: ${game.romFilename}", e)
             _active.value = _active.value + (gid to DownloadProgress(
-                gameId = gid,
-                romFilename = game.romFilename,
-                platform = platCode,
-                downloaded = 0,
-                total = game.romSize,
-                speedBps = 0,
-                done_ = false,
+                gameId = gid, romFilename = game.romFilename, platform = platCode,
+                downloaded = 0, total = game.romSize, speedBps = 0, done_ = false,
                 error = humanError(e),
             ))
             onComplete(null)
         }
     }
 
-    /** 把 input 流写到 part 文件, 同时推送进度 */
-    private suspend fun writeToFile(
+    private suspend fun writeToOutput(
         input: java.io.InputStream,
-        part: File,
+        output: java.io.OutputStream,
         total: Long,
         gid: Long,
         filename: String,
         platCode: String,
     ) = withContext(Dispatchers.IO) {
-        part.outputStream().use { out ->
-            val buf = ByteArray(64 * 1024)
-            var done = 0L
-            var lastEmit = 0L
-            var lastBytes = 0L
-            while (true) {
-                val n = input.read(buf)
-                if (n <= 0) break
-                out.write(buf, 0, n)
-                done += n
-                val now = System.currentTimeMillis()
-                if (now - lastEmit > 250 || done == total) {
-                    val dt = (now - lastEmit).coerceAtLeast(1)
-                    val speed = ((done - lastBytes) * 1000 / dt).coerceAtLeast(0)
-                    _active.value = _active.value + (gid to DownloadProgress(
-                        gameId = gid,
-                        romFilename = filename,
-                        platform = platCode,
-                        downloaded = done,
-                        total = total,
-                        speedBps = speed,
-                        done_ = done >= total,
-                    ))
-                    lastEmit = now
-                    lastBytes = done
-                }
+        val buf = ByteArray(64 * 1024)
+        var done = 0L
+        var lastEmit = 0L
+        var lastBytes = 0L
+        while (true) {
+            val n = input.read(buf)
+            if (n <= 0) break
+            output.write(buf, 0, n)
+            done += n
+            val now = System.currentTimeMillis()
+            if (now - lastEmit > 250 || done == total) {
+                val dt = (now - lastEmit).coerceAtLeast(1)
+                val speed = ((done - lastBytes) * 1000 / dt).coerceAtLeast(0)
+                _active.value = _active.value + (gid to DownloadProgress(
+                    gameId = gid, romFilename = filename, platform = platCode,
+                    downloaded = done, total = total, speedBps = speed, done_ = done >= total,
+                ))
+                lastEmit = now
+                lastBytes = done
             }
         }
     }
@@ -354,9 +341,24 @@ class DownloadManager @Inject constructor(
     }
 }
 
+/** ROM 下载目标: SAF 目录 或 普通 File */
+sealed class RomTarget {
+    abstract fun exists(): Boolean
+    abstract fun describe(): String
+
+    data class Default(val file: File) : RomTarget() {
+        override fun exists() = file.exists()
+        override fun describe() = file.absolutePath
+    }
+    data class Saf(val doc: DocumentFile) : RomTarget() {
+        override fun exists() = doc.exists()
+        override fun describe() = doc.uri.toString()
+    }
+}
+
 enum class RomSource {
-    LOCAL,       // 服务器本地
-    REMOTE_115, // 115 CDN (裸 OkHttp 下载)
+    LOCAL,
+    REMOTE_115,
     UNKNOWN,
 }
 

@@ -93,6 +93,20 @@ data class IntentSpec(
     @SerialName("package") val pkg: String,
 )
 
+/**
+ * ROM 下载信息: 服务端 /api/games/{id}/rom 返回
+ * - source="local" → 客户端走 downloadRom (binary stream)
+ * - source="remote_115" → 客户端走裸 OkHttp 下载 url (115 CDN, 不带 Authorization)
+ */
+@Serializable
+data class RomInfoResponse(
+    val source: String,           // "local" | "remote_115"
+    val url: String = "",         // 115 CDN URL (local 时为空)
+    val filename: String = "",
+    val size: Long = 0,
+    @SerialName("pickcode") val pickcode: String = "",
+)
+
 @Serializable
 data class PlayStreamResponse(
     @SerialName("session_id") val sessionId: String,

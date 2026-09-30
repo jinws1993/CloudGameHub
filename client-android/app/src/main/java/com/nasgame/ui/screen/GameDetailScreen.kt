@@ -179,18 +179,18 @@ class GameDetailViewModel @Inject constructor(
 
     private suspend fun launchEmulator(ctx: Context, platCode: String, romFile: File, g: Game) {
         val pkg = prefs.getEmulatorPkg(platCode)
-        if (pkg.isNullOrBlank()) {
-            _msg.value = "请先在设置中配置 [$platCode] 的模拟器包名"
-            return
-        }
+        val globalPkg = prefs.globalEmulatorPkg()
+        val raCore = prefs.defaultRetroArchCore()
 
-        val resolvedPkg = EmulatorLauncher.resolvePackage(ctx, platCode, pkg)
+        // 优先级: 平台级 → 全局模拟器 → 已知 KNOWN_PACKAGES 自动检测
+        val resolvedPkg = EmulatorLauncher.resolvePackage(ctx, platCode, pkg, globalPkg)
         if (resolvedPkg == null) {
-            _msg.value = "未找到模拟器 [$pkg], 请检查是否已安装或在设置页修改"
+            val tried = listOfNotNull(pkg, globalPkg).joinToString(", ").ifBlank { "(无配置)" }
+            _msg.value = "未找到可用模拟器 (尝试了: $tried). 请在设置配置 RetroArch 包名 (推荐 com.retroarch) 或单个平台模拟器"
             return
         }
 
-        val launched = EmulatorLauncher.launch(ctx, resolvedPkg, romFile.absolutePath)
+        val launched = EmulatorLauncher.launch(ctx, resolvedPkg, romFile.absolutePath, raCore)
         if (launched) {
             try { repo.playLocal(g.id.toLong()) } catch (_: Exception) {}
             _msg.value = "已启动 $resolvedPkg"

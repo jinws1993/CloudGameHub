@@ -42,10 +42,18 @@ interface NasGameApi {
     @POST("/api/games/{id}/play/stream")
     suspend fun playStream(@Path("id") id: Long): PlayStreamResponse
 
-    /** ROM 下载 (follow redirect -> 走 115 CDN 直连, 不走服务器流量) */
+    /** ROM 下载 (本地时服务端流式返回 binary) */
     @GET("/api/games/{id}/rom")
     @Streaming
     suspend fun downloadRom(@Path("id") id: Long): ResponseBody
+
+    /**
+     * ROM 元信息: 服务端返回 source + url + size + filename
+     * - source="local" → 客户端走 downloadRom (binary stream)
+     * - source="remote_115" → 客户端走裸 OkHttp 下载 url (115 CDN, 不带 Authorization)
+     */
+    @GET("/api/games/{id}/rom-info")
+    suspend fun romInfo(@Path("id") id: Long): RomInfoResponse
 
     @GET("/api/stats")
     suspend fun stats(): StatsResponse

@@ -1289,7 +1289,8 @@ async def download_rom(gid: int,
     """获取 ROM 数据。
 
     1. 本地有 ROM -> 直接流式返回
-    2. 本地无 ROM 但在 115 网盘 -> 拿下载 URL, 302 重定向 (浏览器/客户端能直接拿 CDN 直链)
+    2. 本地无 + 115 集成 -> 302 重定向到 CDN (legacy 兼容)
+    3. 都无 -> 404
     """
     g = await db.get(Game, gid)
     if not g:
@@ -1324,13 +1325,63 @@ async def download_rom(gid: int,
         try:
             async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
                 url = await cli.get_download_url(g.cloud_pickcode)
-            # 返回 302 重定向 (浏览器/客户端跟进后直接拿 CDN 高速下载)
+            # 返回 302 重定向 (兼容旧版 client)
             return RedirectResponse(url, status_code=302,
                                     headers={"Content-Disposition":
                                              f'attachment; filename="{g.rom_filename}"'})
         except Exception as e:
             logger.error(f"115 download fail: {e}")
             raise HTTPException(502, f"云盘下载失败: {e}")
+
+    raise HTTPException(404, "rom not found (本地和 115 都不可用)")
+
+
+@app.get("/api/games/{gid}/rom-info")
+async def get_rom_info(gid: int,
+                       db: AsyncSession = Depends(get_db),
+                       user: User = Depends(current_user)):
+    """
+    获取 ROM 下载元信息 (JSON, 不返回 binary).
+    - 本地有 ROM → source="local", 客户端走 /api/games/{id}/rom 拿 stream
+    - 本地无 + 115 集成 → source="remote_115" + url, 客户端用裸 OkHttp 下载 (避免 115 CDN 拒签)
+
+    为什么不用 /rom 直接返回 binary:
+    - 服务端 302 → 客户端 OkHttp 跟 redirect 时会保留 Authorization 头,
+      115 CDN 不认我们 NAS token, 返回 401
+    - 客户端拿到 JSON url 后用裸 client 下载, 不带任何 NAS auth header
+    """
+    g = await db.get(Game, gid)
+    if not g:
+        raise HTTPException(404, "game not found")
+    full = settings.roms_dir / g.rom_path
+
+    if full.exists():
+        return {
+            "source": "local",
+            "url": f"/api/games/{gid}/rom",
+            "filename": g.rom_filename,
+            "size": g.rom_size,
+            "pickcode": g.cloud_pickcode or "",
+        }
+
+    if g.cloud_source == "115" and g.cloud_pickcode:
+        if not settings.cloud_115_enabled or not settings.cloud_115_cookie:
+            raise HTTPException(404, "本地无 ROM, 且 115 云盘未启用")
+        from .cloud_115 import Pan115Client
+        proxy = ""
+        try:
+            async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
+                url = await cli.get_download_url(g.cloud_pickcode)
+            return {
+                "source": "remote_115",
+                "url": url,
+                "filename": g.rom_filename,
+                "size": g.rom_size,
+                "pickcode": g.cloud_pickcode,
+            }
+        except Exception as e:
+            logger.error(f"115 info fail: {e}")
+            raise HTTPException(502, f"云盘查询失败: {e}")
 
     raise HTTPException(404, "rom not found (本地和 115 都不可用)")
 

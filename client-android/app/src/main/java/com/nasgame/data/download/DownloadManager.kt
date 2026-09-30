@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.nasgame.data.api.Game
 import com.nasgame.data.api.NasGameApi
+import com.nasgame.data.api.RomInfoResponse
 import com.nasgame.data.prefs.PrefsStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -22,11 +23,12 @@ import javax.inject.Singleton
  * 负责 ROM 下载的核心组件。
  *
  * 关键设计：
- * 1. **顺序 + 信号量限流** - 同时最多 N 个 (默认 2, 用户可配) 大文件下载, 避免手机带宽 / 内存爆掉
- * 2. **跟 302 跳转** - OkHttp 默认 follow redirect. 服务端会 302 到 115 CDN, 直连拉文件不走服务器流量
+ * 1. **顺序 + 信号量限流** - 同时最多 N 个 (默认 2, 用户可配) 大文件下载
+ * 2. **115 CDN 直链** - 服务端返回 JSON {source, url, size, filename}, 客户端用**裸 OkHttp**
+ *    下载 (无 AuthInterceptor, 避免 115 CDN 拒签), 不走服务器流量
  * 3. **进度回调** - Flow<DownloadProgress> 暴露给 UI
  * 4. **断点续传** - 校验已下载文件大小, 不匹配重新拉; 未来可加 Range header
- * 5. **缓存路径** - getExternalFilesDir() /roms/<plat_code>/<filename>, 用户卸载 App 自动清理
+ * 5. **缓存路径可配置** - 默认 <app-external>/roms/<plat>, 用户可改成外置 SD / 自定义路径
  */
 @Singleton
 class DownloadManager @Inject constructor(
@@ -35,12 +37,22 @@ class DownloadManager @Inject constructor(
 ) {
     private val TAG = "DownloadManager"
 
-    /** 手动注入 OkHttp (用单独客户端, 大文件 timeout 长) */
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    /**
+     * 裸 OkHttp client: 用来下载 115 CDN 直链, 不带 Authorization header.
+     *
+     * 关键点:
+     * - followRedirects(true): 115 CDN 偶尔会重定向到子域名
+     * - retryOnConnectionFailure(true): "unexpected end of stream" 通常是 CDN 连接被重置,
+     *   OkHttp 内置 retry 大部分情况可恢复
+     * - 长 timeout: 大 ROM 慢
+     * - **不** add AuthInterceptor: 115 CDN 不认我们 NAS 的 token, 带 Authorization 会 401
+     */
+    private val rawClient: OkHttpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
+        .retryOnConnectionFailure(true)
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(600, java.util.concurrent.TimeUnit.SECONDS)   // 大 ROM 可能慢
+        .readTimeout(600, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(600, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
@@ -64,7 +76,6 @@ class DownloadManager @Inject constructor(
         }
     }
 
-    /** 重新配置并发数 (清掉旧的 + 用新的) */
     fun updateConcurrency(n: Int) {
         scope.launch {
             sem = Semaphore(n.coerceAtLeast(1))
@@ -72,11 +83,30 @@ class DownloadManager @Inject constructor(
         }
     }
 
-    /** 暴露一个独立的 OkHttp 实例给 Raw 304/Range 调用 */
-    fun rawHttpClient(): OkHttpClient = client
+    fun rawHttpClient(): OkHttpClient = rawClient
+
+    /**
+     * ROM 存储根路径.
+     * - 用户可在 Settings 改成外置 SD
+     * - 默认 <app-external>/roms (卸载 App 自动清理)
+     */
+    suspend fun romRootDir(): File {
+        val p = prefs.romStoragePath()
+        val dir = File(p)
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    /** 兼容: 当前 ROM 路径 (不 suspend). 默认用 PrefsStore 缓存的路径. */
+    fun romRootDirCached(): File {
+        val p = prefs.defaultRomStoragePath()
+        val dir = File(p)
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
 
     fun romCacheDir(platformCode: String): File {
-        val dir = File(ctx.getExternalFilesDir(null), "roms/$platformCode")
+        val dir = File(romRootDirCached(), platformCode)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
@@ -87,22 +117,16 @@ class DownloadManager @Inject constructor(
         return f.exists() && f.length() == game.romSize && game.romSize > 0
     }
 
-    /** 本地 ROM 路径 (不管是否完整) */
     fun localPath(game: Game): File =
         romCacheDir(game.platform?.code ?: "misc").resolve(game.romFilename)
 
     /**
      * 探查 ROM 来源 — 让 UI 显示"从哪下"
      *
-     * 服务端 /api/games/{id}/rom 的行为：
-     * - 本地有 → 流式返回 (Content-Length 已知)
-     * - 本地无 + 115 启用 → 302 到 CDN (Network 跟 redirect 后, Content-Length 已知)
-     * - 本地无 + 115 未启用 → 404
-     *
-     * UI 显示策略：调用方只需知道 ROM 是不是本地已有。
-     * 1. isLocal() = true → 走本地
-     * 2. isLocal() = false 但 cloudSource == "115" 且 server 启用 → 走 115 CDN
-     * 3. 其他 → 下载失败
+     * 服务端 /api/games/{id}/rom 行为:
+     * - 本地有 → 流式返回 (binary)
+     * - 本地无 + 115 → JSON {source:"remote_115", url, size, filename}
+     * - 都无 → 404
      */
     @Suppress("UNUSED_PARAMETER")
     fun probeSource(api: NasGameApi, game: Game): RomSource {
@@ -125,32 +149,40 @@ class DownloadManager @Inject constructor(
             return false
         }
 
-        // 加队列
         addToQueue(game)
 
         val job = scope.launch {
             sem.withPermit {
-                    doDownloadWork(api, game, dest, onComplete)
-                }
+                doDownloadWork(api, game, dest, onComplete)
+            }
         }
         inflight[game.id.toLong()] = job
         job.invokeOnCompletion { inflight.remove(game.id.toLong()); removeFromQueue(game.id.toLong()) }
         return true
     }
 
-    /** 取消 */
     fun cancel(gameId: Long) {
         inflight.remove(gameId)?.cancel()
         removeFromQueue(gameId)
     }
 
-    /** 取消全部 */
     fun cancelAll() {
         inflight.values.forEach { it.cancel() }
         inflight.clear()
         _queue.value = emptyList()
     }
 
+    /**
+     * 核心下载逻辑:
+     * 1. 调 /api/games/{id}/rom
+     * 2. 服务端根据是否有本地文件返回:
+     *    - 200 + binary body (本地)
+     *    - 200 + JSON (115, 客户端跟裸 OkHttp 下载 CDN URL)
+     *    - 404 (都没有)
+     *
+     * 用 Retrofit 调是因为有 auth interceptor (调 server 需要 token).
+     * 用裸 OkHttp 下载 115 CDN URL 是因为 115 CDN 不认我们 NAS token.
+     */
     private suspend fun doDownloadWork(
         api: NasGameApi,
         game: Game,
@@ -161,56 +193,70 @@ class DownloadManager @Inject constructor(
         val platCode = game.platform?.code ?: "misc"
         Log.i(TAG, "Start download: $platCode/${game.romFilename} (${game.romSize} bytes)")
 
-        // 临时文件 (.part) — 下载完 rename 上去, 防中断留半成品
         dest.parentFile?.mkdirs()
         val part = File(dest.parentFile, "${dest.name}.part")
 
         try {
-            val body = api.downloadRom(gid)
-            val total = body.contentLength().takeIf { it > 0 } ?: game.romSize
+            // 1. 拿到下载信息 (本地 or 115)
+            val info = api.romInfo(gid)
+            Log.i(TAG, "RomInfo: source=${info.source}, size=${info.size}, url=${info.url.take(80)}...")
 
-            // 进度
-            body.byteStream().use { input ->
-                part.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L
-                    var lastEmit = 0L
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n <= 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        val now = System.currentTimeMillis()
-                        // 每 200ms 推送一次进度, 避免 UI 风暴
-                        if (now - lastEmit > 200 || done == total) {
-                            lastEmit = now
-                            val speed = if (lastEmit > 0) (n.toLong() * 1000 / 200.coerceAtLeast(now - lastEmit + 200)) else 0L
-                            _active.value = _active.value + (gid to DownloadProgress(
-                                gameId = gid,
-                                romFilename = game.romFilename,
-                                platform = platCode,
-                                downloaded = done,
-                                total = total,
-                                speedBps = speed,
-                                done_ = done >= total,
-                            ))
-                        }
+            val total = info.size.takeIf { it > 0 } ?: game.romSize
+            val filename = info.filename.ifBlank { game.romFilename }
+
+            // 2. 进度占位
+            _active.value = _active.value + (gid to DownloadProgress(
+                gameId = gid,
+                romFilename = filename,
+                platform = platCode,
+                downloaded = 0,
+                total = total,
+                speedBps = 0,
+                done_ = false,
+            ))
+
+            // 3. 下载 body
+            when (info.source) {
+                "local" -> {
+                    // 服务端流式返回 (走 Retrofit + Auth header)
+                    val body = api.downloadRom(gid)
+                    writeToFile(body.byteStream(), part, total, gid, filename, platCode)
+                }
+                "remote_115" -> {
+                    // 115 CDN — 裸 OkHttp, 不带 Authorization (避免 115 CDN 401)
+                    if (info.url.isBlank()) {
+                        throw IOException("服务端返回空 URL")
+                    }
+                    val req = okhttp3.Request.Builder()
+                        .url(info.url)
+                        .header("User-Agent", "NasGameHub/1.0 (Android)")
+                        .build()
+                    val resp = rawClient.newCall(req).execute()
+                    if (!resp.isSuccessful) {
+                        resp.close()
+                        throw IOException("115 CDN HTTP ${resp.code}: ${resp.message}")
+                    }
+                    val body = resp.body ?: throw IOException("115 CDN 空响应体")
+                    try {
+                        writeToFile(body.byteStream(), part, total, gid, filename, platCode)
+                    } finally {
+                        body.close()
                     }
                 }
+                else -> throw IOException("未知 source: ${info.source}")
             }
 
             if (part.length() != total && total > 0) {
                 throw IOException("下载不完整: ${part.length()} / $total")
             }
 
-            // 重命名为正式文件
             if (dest.exists()) dest.delete()
             part.renameTo(dest)
 
             Log.i(TAG, "Done: $dest (${dest.length()} bytes)")
             _active.value = _active.value + (gid to DownloadProgress(
                 gameId = gid,
-                romFilename = game.romFilename,
+                romFilename = filename,
                 platform = platCode,
                 downloaded = total,
                 total = total,
@@ -234,9 +280,60 @@ class DownloadManager @Inject constructor(
                 total = game.romSize,
                 speedBps = 0,
                 done_ = false,
-                error = e.message ?: e.javaClass.simpleName,
+                error = humanError(e),
             ))
             onComplete(null)
+        }
+    }
+
+    /** 把 input 流写到 part 文件, 同时推送进度 */
+    private suspend fun writeToFile(
+        input: java.io.InputStream,
+        part: File,
+        total: Long,
+        gid: Long,
+        filename: String,
+        platCode: String,
+    ) = withContext(Dispatchers.IO) {
+        part.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            var done = 0L
+            var lastEmit = 0L
+            var lastBytes = 0L
+            while (true) {
+                val n = input.read(buf)
+                if (n <= 0) break
+                out.write(buf, 0, n)
+                done += n
+                val now = System.currentTimeMillis()
+                if (now - lastEmit > 250 || done == total) {
+                    val dt = (now - lastEmit).coerceAtLeast(1)
+                    val speed = ((done - lastBytes) * 1000 / dt).coerceAtLeast(0)
+                    _active.value = _active.value + (gid to DownloadProgress(
+                        gameId = gid,
+                        romFilename = filename,
+                        platform = platCode,
+                        downloaded = done,
+                        total = total,
+                        speedBps = speed,
+                        done_ = done >= total,
+                    ))
+                    lastEmit = now
+                    lastBytes = done
+                }
+            }
+        }
+    }
+
+    private fun humanError(e: Exception): String {
+        val msg = e.message ?: e.javaClass.simpleName
+        return when {
+            msg.contains("unexpected end of stream", true) ->
+                "115 CDN 连接中断 (重试中). 详细: $msg"
+            msg.contains("timeout", true) -> "下载超时"
+            msg.contains("404") -> "ROM 不存在 (本地和 115 都没找到)"
+            msg.contains("401") || msg.contains("403") -> "权限不足, 请检查登录状态"
+            else -> msg.take(120)
         }
     }
 
@@ -259,7 +356,7 @@ class DownloadManager @Inject constructor(
 
 enum class RomSource {
     LOCAL,       // 服务器本地
-    REMOTE_115, // 115 CDN (302 redirect)
+    REMOTE_115, // 115 CDN (裸 OkHttp 下载)
     UNKNOWN,
 }
 

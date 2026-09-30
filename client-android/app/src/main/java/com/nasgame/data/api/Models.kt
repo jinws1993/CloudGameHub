@@ -57,8 +57,14 @@ data class Game(
     val genre: String = "",
     val rating: Float = 0f,
     val cover: String = "",
+    val logo: String = "",
+    val video: String = "",
     val screenshots: List<String> = emptyList(),
     @SerialName("scrape_status") val scrapeStatus: String = "pending",
+    @SerialName("scrape_source") val scrapeSource: String = "",
+    @SerialName("cloud_source") val cloudSource: String = "",
+    @SerialName("local_available") val localAvailable: Boolean = false,
+    @SerialName("last_played") val lastPlayed: String? = null,
     val favorite: Boolean = false,
     @SerialName("play_count") val playCount: Int = 0,
 )
@@ -67,7 +73,7 @@ data class Game(
 data class GamesResponse(
     val total: Int,
     val page: Int,
-    @SerialName("page_size") val pageSize: Int,
+    @SerialName("page_size") val pageSize: Int = 60,
     val items: List<Game>,
 )
 

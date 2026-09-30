@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Game controller silhouette -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M54,30
+            C42,30 32,38 32,50
+            C32,58 38,64 46,66
+            L46,72
+            C46,76 50,76 52,72
+            L56,72
+            C58,76 62,76 62,72
+            L62,66
+            C70,64 76,58 76,50
+            C76,38 66,30 54,30 Z" />
+    <!-- D-pad left -->
+    <path
+        android:fillColor="#0F1419"
+        android:pathData="M44,46 h6 v3 h-6 z M44,52 h6 v3 h-6 z M40,49 h3 v3 h-3 z M51,49 h3 v3 h-3 z" />
+    <!-- Buttons right -->
+    <path
+        android:fillColor="#0F1419"
+        android:pathData="M64,46 m-3,0 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0" />
+    <path
+        android:fillColor="#0F1419"
+        android:pathData="M68,52 m-3,0 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0" />
+</vector>

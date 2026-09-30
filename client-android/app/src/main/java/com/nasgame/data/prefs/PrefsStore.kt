@@ -19,6 +19,7 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
     private val TOKEN = stringPreferencesKey("token")
     private val USER = stringPreferencesKey("username")
     private val EMU_PREFIX = "emu_pkg_"
+    private val CONCURRENT_DOWNLOADS = intPreferencesKey("concurrent_downloads")
 
     val serverUrl: Flow<String?> = ctx.dataStore.data.map { it[SERVER] }
     val token: Flow<String?> = ctx.dataStore.data.map { it[TOKEN] }
@@ -53,5 +54,13 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
         return prefs.entries
             .filter { it.key.name.startsWith(EMU_PREFIX) }
             .associate { it.key.name.removePrefix(EMU_PREFIX) to (it.value as String) }
+    }
+
+    /** 最大并发下载数 (默认 2, ROM 文件大, NAS/手机带宽压力) */
+    suspend fun concurrentDownloads(): Int =
+        ctx.dataStore.data.first()[CONCURRENT_DOWNLOADS] ?: 2
+
+    suspend fun setConcurrentDownloads(n: Int) {
+        ctx.dataStore.edit { it[CONCURRENT_DOWNLOADS] = n }
     }
 }

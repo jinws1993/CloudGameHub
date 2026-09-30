@@ -42,6 +42,7 @@ interface NasGameApi {
     @POST("/api/games/{id}/play/stream")
     suspend fun playStream(@Path("id") id: Long): PlayStreamResponse
 
+    /** ROM 下载 (follow redirect -> 走 115 CDN 直连, 不走服务器流量) */
     @GET("/api/games/{id}/rom")
     @Streaming
     suspend fun downloadRom(@Path("id") id: Long): ResponseBody

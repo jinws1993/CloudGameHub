@@ -33,13 +33,16 @@ class NasGameRepo @Inject constructor(
 
     private var api: NasGameApi? = null
 
+    /** 暴露给其他模块 (DownloadManager 用) — 没登录时抛 IOException */
+    val apiService: NasGameApi get() = require()
+
     suspend fun init() {
         val token = prefs.currentToken()
         val server = prefs.currentServer()
         if (!token.isNullOrBlank() && !server.isNullOrBlank()) {
             buildApi(server, token)
             try {
-                val me = api!!.me()
+                api!!.me()
                 _isLoggedIn.value = true
             } catch (e: Exception) {
                 _isLoggedIn.value = false
@@ -63,10 +66,7 @@ class NasGameRepo @Inject constructor(
             .create(NasGameApi::class.java)
     }
 
-    fun serverUrl(): String? = runBlockingGet { prefs.currentServer() }
-
-    private fun <T> runBlockingGet(block: suspend () -> T): T =
-        kotlinx.coroutines.runBlocking { block() }
+    suspend fun serverUrl(): String? = prefs.currentServer()
 
     suspend fun login(server: String, username: String, password: String): LoginResponse {
         // build temp api without token for login

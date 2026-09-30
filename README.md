@@ -29,6 +29,8 @@ NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深�
 
 整个流程 **NAS 上几乎零磁盘占用**，**不用预先批量下载整个 ROM 库到 NAS**。手机没 ROM 用时随时从 115 拉一个。
 
+![登录页](docs/images/login-screenshot.png)
+
 ### ✨ 主要功能
 
 - **📂 115 网盘深度集成**：扫码登录、目录浏览 (支持子目录点进)、批量后台导入+刮削、远程分发到客户端下载
@@ -37,6 +39,8 @@ NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深�
 - **📱 客户端远程下载 ROM**：Android / Windows 客户端点一下游戏，ROM 从 115 直接下到本地模拟器开玩
 - **🖼️ 手动上传封面**：AI/SS 都找不到时手动上传
 - **🚀 Web UI 远程游玩**：浏览器内 Moonlight 串流，或唤起客户端模拟器
+
+![库浏览](docs/images/library-screenshot.png)
 - **🔐 多用户权限**：管理员 / 普通用户两级
 
 - 🎯 **自动扫描归类**：把任意结构的 ROM 文件夹，按扩展名/目录自动识别到 25 个平台 (FC/SFC/N64/GBA/PS1/PS2/PSP/Wii/GC/DC/Saturn/MD/3DS/NDS/J2ME/街机/...)

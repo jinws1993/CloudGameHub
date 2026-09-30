@@ -21,6 +21,15 @@
   </div>
 </div>
 <script src="/static/vue.global.prod.js"></script>
+<script>
+  // Hidden dev hook for headless screenshot — only enabled when ?test_token= present.
+  // Sets a window flag so app.js can pick up the URL token. No effect in production.
+  try {
+    if (new URLSearchParams(location.search).get('test_token')) {
+      window.__NASGAME_DEV_HOOK__ = true;
+    }
+  } catch (e) {}
+</script>
 <script src="/static/app.js?v=1790752930"></script>
 </body>
 </html>

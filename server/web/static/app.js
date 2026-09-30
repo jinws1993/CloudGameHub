@@ -9,6 +9,20 @@ const { createApp, ref, reactive, computed, onMounted, onUnmounted,
         watch, h, defineComponent, provide, inject } = Vue;
 
 // ---------------- API client ----------------
+// Hidden dev hook (?test_token=<jwt>) for headless screenshot. Set NASGAME_DEV_HOOK=1 in docker env
+// to enable; ignored otherwise. Used only for automated README screenshots — not a security risk
+// because the JWT itself still requires valid credentials.
+if (typeof window !== 'undefined' && window.__NASGAME_DEV_HOOK__) {
+  try {
+    const _qs = new URLSearchParams(location.search);
+    const _tt = _qs.get('test_token');
+    if (_tt) {
+      localStorage.setItem('nasgame_token', _tt);
+      console.log('[NasGameHub] Test token injected via URL');
+    }
+  } catch (e) {}
+}
+
 const api = {
   token: localStorage.getItem('nasgame_token') || '',
   setToken(t) {

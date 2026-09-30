@@ -21,11 +21,10 @@ API_BASE = "https://webapi.115.com"
 FILES_BASE = "https://webapi.115.com/files"
 
 # User-Agent 必须使用桌面浏览器, 不然会被风控拦截
-UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
+# 但不能使用 Chrome UA — 115 CDN 现在对 Chrome UA 返 403 ("ua not match cookie").
+# 实践证实: httpx 自己的 "python-httpx/X.X" UA + webapi set-cookie 可以 下。
+# UA 为 None 表示让 httpx 用 client default UA.
+UA = None
 
 
 class Pan115Error(Exception):
@@ -52,12 +51,18 @@ class Pan115Client:
             self._proxies = {"http://": proxy_url, "https://": proxy_url}
 
     def _headers(self) -> dict:
-        return {
-            "User-Agent": UA,
-            "Cookie": self.cookie_str,
-            "Referer": "https://115.com/",
-            "Origin": "https://115.com",
-        }
+        """client-level headers. **不要传 Cookie** — 会覆盖 httpx 存的 webapi
+        set-cookie, 使 115 CDN 返 403 'no cookie value'.
+        参考: test_br3.py 显示 clean client (只 cookie jar) = 200,
+        但 client level 加 Cookie = 403. webapi 返的 set-cookie
+        8a723fe9259b219cba8f7bd348c409cf=... 是 115 session cookie,
+        必须作为 cookie jar entry 而不是 request header.
+        UA 设 None 用 httpx default (Chrome UA 也 被 115 CDN 拒).
+        """
+        h: dict = {}
+        if UA is not None:
+            h["User-Agent"] = UA
+        return h
 
     async def __aenter__(self):
         self._client = httpx.AsyncClient(
@@ -66,6 +71,18 @@ class Pan115Client:
             follow_redirects=True,
             proxies=self._proxies,
         )
+        # 把 115 手动 Cookie 放到 cookie jar 里 (不是 header), 让 webapi
+        # 返的 set-cookie 也能加到同一域。
+        # 115 cookie 是 raw string "UID=...; CID=...; SEID=...; KID=..."
+        for part in re.split(r"[;\n]+", self.cookie_str):
+            part = part.strip()
+            if not part or '=' not in part:
+                continue
+            name, _, value = part.partition('=')
+            name = name.strip()
+            value = value.strip()
+            self._client.cookies.set(name, value, domain="webapi.115.com")
+            self._client.cookies.set(name, value, domain=".115.com")
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -111,10 +128,17 @@ class Pan115Client:
             if not j.get("state"):
                 return {"ok": False, "error": j.get("message") or j.get("error") or "Cookie 无效"}
             # 用户信息通常在 login 后能看到, 这里返回最基本的数据
+            # /files 返 data 可能是 list (目] items) 或 dict ({count, ...})。
+            data = j.get("data")
+            count = 0
+            if isinstance(data, dict):
+                count = data.get("count") or 0
+            elif isinstance(data, list):
+                count = len(data)
             return {
                 "ok": True,
-                "count": j.get("data", {}).get("count", 0),
-                "msg": f"登录成功, 根目录有 {j.get('data', {}).get('count', 0)} 项",
+                "count": count,
+                "msg": f"登录成功, 根目录有 {count} 项",
             }
         except Exception as e:
             return {"ok": False, "error": f"网络错误: {type(e).__name__}: {e}"}
@@ -187,6 +211,25 @@ class Pan115Client:
             raise Pan115Error(f"download URL missing in response: {list(j.keys())}")
         # 2. 该 URL 本身就是 CDN 直链, 浏览器/客户端直接 GET 即可
         return url
+
+    async def stream_download(self, pickcode: str):
+        """服务端代理 115 下载: 拿 URL + 用 client 的 cookie jar GET, 返回 response.
+        httpx AsyncClient 默认带 cookie jar, get_url 期间 webapi set-cookie 会自动
+        带到 GET URL 请求 (curl 默认不带, 因此裸 curl 会 403)。
+        Returns httpx.Response, caller should close it (await r.aclose())。
+        """
+        if not self._client:
+            raise Pan115Error("client not initialized")
+        url = await self.get_download_url(pickcode)
+        r = await self._client.get(url, follow_redirects=True)
+        if r.status_code != 200:
+            body_preview = r.text[:200]
+            await r.aclose()
+            raise Pan115Error(
+                f"115 CDN 返 {r.status_code}, body: {body_preview}. "
+                f"可能是 cookie 失效或 115 限流. 请到 Web 设置页重新填入 115 Cookie."
+            )
+        return r
 
     async def get_file_info(self, pickcode: str) -> Optional[dict]:
         """取文件的元数据 (sha1, size, name, ...)"""

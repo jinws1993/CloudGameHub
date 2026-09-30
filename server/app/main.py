@@ -1345,12 +1345,40 @@ async def download_rom(gid: int,
         from .cloud_115 import Pan115Client, Pan115Error
         proxy = ""  # 115 强制直连, 不用全局代理
         try:
+            # **服务端代理下载**: 拿 URL 后, server 自己的 httpx client 带 cookie jar
+            # 去 GET CDN, 成功 200 后 stream 给 client. 避免 client 裸 GET 被 115
+            # cookie session check 拒 (错误 "ua not match cookie" / 403).
             async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
-                url = await cli.get_download_url(g.cloud_pickcode)
-            # 返回 302 重定向 (兼容旧版 client)
-            return RedirectResponse(url, status_code=302,
-                                    headers={"Content-Disposition":
-                                             f'attachment; filename="{g.rom_filename}"'})
+                resp = await cli.stream_download(g.cloud_pickcode)
+
+            async def iterfile():
+                try:
+                    async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                        yield chunk
+                finally:
+                    await resp.aclose()
+
+            # 用 115 的 Content-Length / filename, fallback 到 game 表
+            content_length = resp.headers.get("Content-Length") or str(g.rom_size)
+            fname = g.rom_filename
+            cd = resp.headers.get("Content-Disposition") or ""
+            import re as _re
+            from urllib.parse import unquote
+            m = _re.search(r'filename=([^\;\r\n]+)', cd)
+            if m:
+                fname = unquote(m.group(1).strip().strip('"'))
+
+            return StreamingResponse(
+                iterfile(),
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{fname}"',
+                    "Content-Length": content_length,
+                },
+            )
+        except Pan115Error as e:
+            logger.error(f"115 download fail: {e}")
+            raise HTTPException(502, f"云盘下载失败: {e}")
         except Exception as e:
             logger.error(f"115 download fail: {e}")
             raise HTTPException(502, f"云盘下载失败: {e}")
@@ -1365,12 +1393,17 @@ async def get_rom_info(gid: int,
     """
     获取 ROM 下载元信息 (JSON, 不返回 binary).
     - 本地有 ROM → source="local", 客户端走 /api/games/{id}/rom 拿 stream
-    - 本地无 + 115 集成 → source="remote_115" + url, 客户端用裸 OkHttp 下载 (避免 115 CDN 拒签)
+    - 本地无 + 115 集成 → source="remote_115", 客户端调用 /api/games/{id}/rom
+      (server 会用自身 cookie jar stream-proxy 115 CDN 下载)
 
-    为什么不用 /rom 直接返回 binary:
-    - 服务端 302 → 客户端 OkHttp 跟 redirect 时会保留 Authorization 头,
-      115 CDN 不认我们 NAS token, 返回 401
-    - 客户端拿到 JSON url 后用裸 client 下载, 不带任何 NAS auth header
+    为什么走服务端代理 (而不是返 raw 115 URL 给 client):
+    - 115 CDN 现在对裸 GET 会返 403 "ua not match cookie" / "no cookie value"
+    - 因为 115 webapi 返回 file_url 时, server 会收到 set-cookie (如
+      8a723fe9259b219cba8f7bd348c409cf=...). 这些 session cookie 被
+      webapi 用于验证 CDN 请求合法性. client 的裸 OkHttp 默认不带 cookie jar,
+      不会自动追加, 所以 GET URL 被 拒.
+    - server 的 httpx.AsyncClient 默认带 cookie jar, 自动跟 redirect 时
+      会携带 session cookie, 能成功 GET CDN.
     """
     g = await db.get(Game, gid)
     if not g:
@@ -1396,20 +1429,23 @@ async def get_rom_info(gid: int,
         from .cloud_115 import Pan115Client, Pan115Error
         proxy = ""
         try:
+            # server 验证 cookie 是否还有效 (拿 URL 能成不代表 cookie 好, GET CDN 才知).
+            # 如果 cookie 失效 / CDN 拒, Pan115Error 会调起下面的 except.
             async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
+                # 仅拿 file_url (轻量, 顺便验 cookie 不过期)
                 url = await cli.get_download_url(g.cloud_pickcode)
             return {
                 "source": "remote_115",
-                "url": url,
+                "url": f"/api/games/{gid}/rom",   # client 走这里, server proxy 下载
                 "filename": g.rom_filename,
                 "size": g.rom_size,
                 "pickcode": g.cloud_pickcode,
+                # 给 client 一个 “服务端 proxy” 标记, 以免它手痒走裸 OkHttp
+                "_proxy": True,
             }
         except Pan115Error as e:
-            # 115 API 错误 (例如 cookie 过期 errno 990001 / token invalid 50051)
             msg = str(e)
             logger.error(f"115 info fail: {msg}")
-            # 提示用户去 web settings 页重新填 cookie
             raise HTTPException(502, f"115 网盘调用失败: {msg}. 请到 Web 设置页重新填入 115 Cookie (Cookie 有效期约 1 周).")
         except Exception as e:
             logger.error(f"115 info fail: {e}")

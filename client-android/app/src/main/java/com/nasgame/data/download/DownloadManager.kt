@@ -254,17 +254,9 @@ class DownloadManager @Inject constructor(
                     body.byteStream()
                 }
                 "remote_115" -> {
-                    if (info.url.isBlank()) throw IOException("服务端返回空 URL")
-                    val req = okhttp3.Request.Builder()
-                        .url(info.url)
-                        .header("User-Agent", "NasGameHub/1.0 (Android)")
-                        .build()
-                    val resp = rawClient.newCall(req).execute()
-                    if (!resp.isSuccessful) {
-                        resp.close()
-                        throw IOException("115 CDN HTTP ${resp.code}: ${resp.message}")
-                    }
-                    val body = resp.body ?: throw IOException("115 CDN 空响应体")
+                    // server 代理 115 下载. 直接调 NAS API /api/games/{id}/rom (已带 NAS Auth),
+                    // 身 server 会用 cookie jar GET 115 CDN 后 stream 给我们.
+                    val body = api.downloadRom(gid)
                     body.byteStream()
                 }
                 else -> throw IOException("未知 source: ${info.source}")

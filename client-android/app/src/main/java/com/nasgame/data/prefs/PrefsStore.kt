@@ -17,8 +17,11 @@ private val Context.dataStore by preferencesDataStore(name = "nasgame")
 class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Context) {
 
     private val SERVER = stringPreferencesKey("server_url")
+    private val LAST_SERVER = stringPreferencesKey("last_server_url")
     private val TOKEN = stringPreferencesKey("token")
     private val USER = stringPreferencesKey("username")
+    private val SAVED_PASSWORD = stringPreferencesKey("saved_password")
+    private val REMEMBER_ME = booleanPreferencesKey("remember_me")
     private val EMU_PREFIX = "emu_pkg_"
     private val CONCURRENT_DOWNLOADS = intPreferencesKey("concurrent_downloads")
     /** ROM 存储路径 — 两种形式:
@@ -39,17 +42,44 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
     suspend fun currentServer(): String? = ctx.dataStore.data.first()[SERVER]
     suspend fun currentToken(): String? = ctx.dataStore.data.first()[TOKEN]
 
-    suspend fun saveLogin(server: String, token: String, username: String) {
+    /** 上次连接的服务器地址 (不论登录状态, 总是记住) */
+    suspend fun lastServerUrl(): String? = ctx.dataStore.data.first()[LAST_SERVER]
+    suspend fun rememberLastServer(url: String) {
+        ctx.dataStore.edit { it[LAST_SERVER] = url }
+    }
+
+    /** 记住密码 (仅当勾选时才存储, 明文存在 DataStore) */
+    suspend fun savedPassword(): String? = ctx.dataStore.data.first()[SAVED_PASSWORD]
+    suspend fun isRememberMe(): Boolean = ctx.dataStore.data.first()[REMEMBER_ME] ?: false
+    suspend fun setRememberMe(remember: Boolean, password: String?) {
+        ctx.dataStore.edit {
+            if (remember && !password.isNullOrBlank()) {
+                it[SAVED_PASSWORD] = password
+                it[REMEMBER_ME] = true
+            } else {
+                it.remove(SAVED_PASSWORD)
+                it[REMEMBER_ME] = false
+            }
+        }
+    }
+
+    suspend fun saveLogin(server: String, token: String, username: String, remember: Boolean, password: String?) {
         ctx.dataStore.edit {
             it[SERVER] = server
+            it[LAST_SERVER] = server
             it[TOKEN] = token
             it[USER] = username
+            it[REMEMBER_ME] = remember
+            if (remember && !password.isNullOrBlank()) it[SAVED_PASSWORD] = password
+            else it.remove(SAVED_PASSWORD)
         }
     }
 
     suspend fun clearLogin() {
         ctx.dataStore.edit {
             it.remove(SERVER); it.remove(TOKEN); it.remove(USER)
+            it.remove(REMEMBER_ME); it.remove(SAVED_PASSWORD)
+            // LAST_SERVER 保留, 退出不抹掉
         }
     }
 

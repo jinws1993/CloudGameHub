@@ -225,9 +225,11 @@ class DownloadManager @Inject constructor(
         val platCode = game.platform?.code ?: "misc"
         Log.i(TAG, "Start download: $platCode/${game.romFilename} (${game.romSize} bytes)")
 
+        var src = ""
         try {
             val target = resolveRomTarget(platCode, game.romFilename)
             val info = api.romInfo(gid)
+            src = info.source
             Log.i(TAG, "RomInfo: source=${info.source}, size=${info.size}, url=${info.url.take(80)}...")
 
             val total = info.size.takeIf { it > 0 } ?: game.romSize
@@ -304,7 +306,7 @@ class DownloadManager @Inject constructor(
             _active.value = _active.value + (gid to DownloadProgress(
                 gameId = gid, romFilename = game.romFilename, platform = platCode,
                 downloaded = 0, total = game.romSize, speedBps = 0, done_ = false,
-                error = humanError(e),
+                error = humanError(e, src),
             ))
             onComplete(null)
         }
@@ -341,14 +343,19 @@ class DownloadManager @Inject constructor(
         }
     }
 
-    private fun humanError(e: Exception): String {
+    private fun humanError(e: Exception, source: String = ""): String {
         val msg = e.message ?: e.javaClass.simpleName
+        val isCloud = source == "remote_115"
         return when {
             msg.contains("unexpected end of stream", true) ->
                 "115 CDN 连接中断 (重试中). 详细: $msg"
             msg.contains("timeout", true) -> "下载超时"
             msg.contains("404") -> "ROM 不存在 (本地和 115 都没找到)"
-            msg.contains("401") || msg.contains("403") -> "权限不足, 请检查登录状态"
+            // 115 CDN 会有自己的 401/403 (IP 风控), 这跟 NAS 登录无关
+            msg.contains("401") || msg.contains("403") -> {
+                if (isCloud) "115 CDN 限流/IP 被拒 (换节点/稍后重试). 详细: $msg"
+                else "权限不足, 请检查登录状态. 详细: $msg"
+            }
             else -> msg.take(120)
         }
     }

@@ -68,7 +68,7 @@ class NasGameRepo @Inject constructor(
 
     suspend fun serverUrl(): String? = prefs.currentServer()
 
-    suspend fun login(server: String, username: String, password: String): LoginResponse {
+    suspend fun login(server: String, username: String, password: String, remember: Boolean = false): LoginResponse {
         // build temp api without token for login
         val tmp = Retrofit.Builder()
             .baseUrl(server.trimEnd('/') + "/")
@@ -78,7 +78,7 @@ class NasGameRepo @Inject constructor(
             .create(NasGameApi::class.java)
         val r = tmp.login(LoginRequest(username, password))
         buildApi(server, r.accessToken)
-        prefs.saveLogin(server, r.accessToken, r.username)
+        prefs.saveLogin(server, r.accessToken, r.username, remember, if (remember) password else null)
         _isLoggedIn.value = true
         return r
     }

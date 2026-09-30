@@ -1,0 +1,23 @@
+# ============================================================
+# NasGameHub .dockerignore
+# ============================================================
+# Files NOT copied into the Docker image during build.
+
+.git/
+.gitignore
+.dockerignore
+.env
+.env.*
+*.md
+!server/**/*.md
+docs/
+LICENSE
+data/
+venv.tar.bak
+*.bak
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+.DS_Store

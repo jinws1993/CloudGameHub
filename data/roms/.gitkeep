@@ -1,0 +1,5 @@
+# Drop ROM files into per-platform subfolders here, e.g.:
+#   data/roms/fc/Super Mario Bros (World).nes
+#   data/roms/sfc/クロノ・トリガー (Japan).smc
+#   data/roms/ps1/Final Fantasy VII (USA) (Disc 1).iso
+# Subfolder names follow the same codes as in the "Platforms" admin page.

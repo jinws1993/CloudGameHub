@@ -1,0 +1,7 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.NASGame" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">#0F1419</item>
+        <item name="android:navigationBarColor">#0F1419</item>
+        <item name="android:windowBackground">#0F1419</item>
+    </style>
+</resources>

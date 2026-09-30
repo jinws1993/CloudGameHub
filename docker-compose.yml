@@ -1,0 +1,43 @@
+# NasGameHub - one-click Docker deployment
+# Default port 14322 (override with NASGAME_PORT)
+# Data and ROMs are persisted under ./data on the host.
+
+services:
+  nasgame:
+    # Image pre-built offline; no network build at startup.
+    image: nasgame:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nasgame
+    restart: unless-stopped
+    ports:
+      - "${NASGAME_PORT:-14322}:14322"
+    env_file:
+      - .env
+    environment:
+      - NASGAME_DATA_DIR=/data
+      - NASGAME_HOST=0.0.0.0
+      - NASGAME_PORT=14322
+      - TZ=Asia/Shanghai
+      - LANG=zh_CN.UTF-8
+      - LC_ALL=zh_CN.UTF-8
+    volumes:
+      # Persistent data: SQLite DB / scraped media / ROMs / config
+      - ./data:/data
+      # Optional: expose the whole NAS storage to the container
+      #   - /vol2/1000:/vol2/1000
+    # Optional: GPU acceleration for streaming
+    # devices:
+    #   - /dev/dri:/dev/dri
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:14322/', timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

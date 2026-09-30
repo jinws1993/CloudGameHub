@@ -1,0 +1,94 @@
+# ============================================================
+# NasGameHub .gitignore
+# ============================================================
+# This file tells Git what NOT to commit.
+# The .gitkeep files inside data/ subfolders keep those folders tracked.
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ----- Virtual environments -----
+.venv/
+venv/
+venv.tar
+*.venv.tar
+
+# ----- Environment variables (NEVER commit secrets) -----
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ----- Logs -----
+data/logs/
+data/logs/*
+*.log
+*.log.*
+logs/
+
+# ----- Database (local user data; schema is in code) -----
+data/db/*.db
+data/db/*.db-journal
+data/db/*.db-shm
+data/db/*.db-wal
+data/nasgame.db
+data/nasgame.pid
+
+# ----- Runtime config (contains AI keys / SS creds / 115 cookie) -----
+data/config/config.json
+data/config/*.local.json
+
+# ----- ROM files (copyright - users add their own) -----
+data/roms/*
+data/roms/*/
+!data/roms/.gitkeep
+!data/roms/*/.gitkeep
+
+# ----- Scraped media cache (regenerated automatically) -----
+data/media/*
+!data/media/.gitkeep
+
+# ----- LibRetro bundled DB (large; reproducible from upstream) -----
+data/libretro_db/*.json
+!data/libretro_db/.gitkeep
+
+# ----- Backup / temp / editor files -----
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ----- IDE -----
+.idea/
+.vscode/
+*.iml
+
+# ----- Build artifacts (Windows client PyInstaller) -----
+*.spec
+*.spec.dist
+*.exe.bak
+
+# ----- Secrets / patterns that should never appear in repo -----
+*cookie*
+*api_key*
+*api-key*
+*password*
+*secret*
+*token*.txt
+*.pem
+*.key
+*.crt
+*credentials*.json

@@ -93,3 +93,4 @@ Thumbs.db
 *.crt
 *credentials*.jsonrelease/
 .android/
+release/

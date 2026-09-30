@@ -49,13 +49,22 @@ jobs:
         run: |
           node -e "new Function(require('fs').readFileSync('server/web/static/app.js','utf8')); console.log('✓ app.js parses')"
 
-      - name: JSON syntax check
+      - name: JSON syntax check (package.json + composer files)
         run: |
           python3 -c "
-          import json
-          json.load(open('.env.example'))
-          print('✓ .env.example parses')
+          import json, glob, os
+          checked = 0
+          for f in glob.glob('**/*.json', recursive=True):
+              if any(x in f for x in ('node_modules/', '.git/', 'build/', '.gradle/')):
+                  continue
+              try:
+                  json.load(open(f))
+                  checked += 1
+              except Exception as e:
+                  print(f'  ⚠️  {f}: {e}')
+          print(f'✓ JSON files parse: {checked}')
           "
+        shell: bash
 
   secret-scan:
     name: Secret / personal data scan

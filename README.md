@@ -1,6 +1,10 @@
 # NasGameHub - 让游戏管理像电影一样简单
 
+![Social Preview](docs/images/social-preview.png)
+
 > **Manage your retro game library like Netflix manages movies.**
+>
+> 📂 一键连接 115 网盘 · 自动导入 ROM · 客户端点一下就到手机本地模拟器
 
 [![docker](https://img.shields.io/badge/docker-ready-blue)](https://www.docker.com/) [![python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/) [![android](https://img.shields.io/badge/android-8%2B-green)](https://developer.android.com/) [![windows](https://img.shields.io/badge/windows-10%2B-blue)](https://www.microsoft.com/) [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -10,9 +14,30 @@
 
 ## 简体中文
 
-NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**。它能把散落在硬盘各处的 ROM 自动归类、自动刮削元数据（封面、标题、简介、年份、厂商等），并通过 **Android / Windows 客户端**远程启动模拟器或串流游玩。
+NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深度集成 **115 网盘**作为游戏 ROM 的天然存放和分发中心——把游戏 ROM 存在 115 上，NasGameHub 自动连接并整理为漂亮游戏库；**手机客户端一键点下，ROM 就直接下载到手机本地模拟器开玩**。中间不占 NAS 硬盘，下载流量走 115，玩游戏完全本地。
+
+### 🎬 典型场景：115 网盘 → 手机本地游玩
+
+```
+1. 你在 115 网盘上有一个 /roms/FC/、/roms/SFC/、/roms/PS1/... 的目录
+2. NasGameHub 扫码连上你的 115 账号
+3. 后台自动扫描 115 目录结构 → AI + ScreenScraper 刮削封面/简介/中文译名
+4. 手机打开 Android 客户端 → 看到与《斗破黑夜》一样的漂亮游戏列表
+5. 点游戏 → ROM 从 115 高速下载到手机本地 (走 115 CDN)
+6. 自动唤起对应平台模拟器 → 画面加载 → 开玩
+```
+
+整个流程 **NAS 上几乎零磁盘占用**，**不用预先批量下载整个 ROM 库到 NAS**。手机没 ROM 用时随时从 115 拉一个。
 
 ### ✨ 主要功能
+
+- **📂 115 网盘深度集成**：扫码登录、目录浏览 (支持子目录点进)、批量后台导入+刮削、远程分发到客户端下载
+- **🎯 自动扫描归类**：把任意结构的 ROM 文件夹，按扩展名/目录自动识别到 25 个平台
+- **🎨 AI 智能刮削**：ScreenScraper.fr + OpenAI 兼容 API 双引擎，**AI 优先**，自动翻译中文译名/简介
+- **📱 客户端远程下载 ROM**：Android / Windows 客户端点一下游戏，ROM 从 115 直接下到本地模拟器开玩
+- **🖼️ 手动上传封面**：AI/SS 都找不到时手动上传
+- **🚀 Web UI 远程游玩**：浏览器内 Moonlight 串流，或唤起客户端模拟器
+- **🔐 多用户权限**：管理员 / 普通用户两级
 
 - 🎯 **自动扫描归类**：把任意结构的 ROM 文件夹，按扩展名/目录自动识别到 25 个平台 (FC/SFC/N64/GBA/PS1/PS2/PSP/Wii/GC/DC/Saturn/MD/3DS/NDS/J2ME/街机/...)
 - 🎨 **AI 智能刮削**：使用 ScreenScraper.fr + OpenAI 兼容 API 双引擎，**AI 优先**识别不规范的中文/英文文件名
@@ -118,12 +143,23 @@ tar -cf venv.tar -C build_venv .
 
 ## English
 
-**NasGameHub** turns your messy retro game ROM collection into a beautiful, Netflix-style game library. It runs on any Linux NAS, scans ROM folders, scrapes metadata from ScreenScraper.fr or any OpenAI-compatible LLM, and exposes a modern Web UI plus native Android/Windows clients for remote play.
+**NasGameHub** turns your messy retro game ROM collection into a beautiful, Netflix-style game library. It's deeply integrated with **115 cloud disk** (China's biggest personal cloud storage) so ROMs live in your 115 cloud, get auto-organized into a scraped library, and **download straight to a local emulator on your phone or PC with a single tap** — almost zero NAS disk used, traffic routed through 115's CDN.
+
+### 🎬 The typical flow: 115 cloud → local play
+
+1. You keep ROMs in a 115 cloud folder (e.g. `/roms/FC/`, `/roms/SFC/`, `/roms/PS1/`)
+2. NasGameHub scans the directory tree, scrapes covers + Chinese/English titles + summaries via AI + ScreenScraper
+3. Your phone opens the Android client and sees a Netflix-style game library
+4. Tap a game → ROM streams down from 115 → emulator launches automatically → you play locally
+
+No pre-bulk-downloading the ROM library to your NAS. Your phone downloads only what you play, when you play it.
 
 ### ✨ Highlights
 
-- **Automatic scanning & classification** — Drop ROMs anywhere; the server organizes 25 platforms by extension/folder
-- **Dual-engine scraping** — ScreenScraper.fr (high-quality) + any OpenAI-compatible LLM (best for Chinese names / irregular filenames). AI runs first when enabled
+- **📂 115 cloud disk deep integration** — QR-code login, subdirectory navigation, background import, push-to-client delivery
+- **📱 Client-side ROM download** — Android/Windows clients pull ROMs straight from 115 to local emulators
+- **🎯 Automatic scanning & classification** — 25 platforms by extension/folder
+- **🎨 Dual-engine scraping** — ScreenScraper.fr + LLM, AI runs first when enabled
 - **Manual cover upload** — If neither source finds a cover, users can upload one
 - **115 cloud disk** support — Browse and import directly from your 115 cloud, with full path navigation (CID strings avoid JS Number precision loss)
 - **Remote play** — Browser Moonlight streaming or one-click client emulator launch

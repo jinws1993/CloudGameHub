@@ -129,8 +129,37 @@ class DownloadManager @Inject constructor(
 
     fun isLocal(game: Game): Boolean {
         return try {
-            runBlocking { resolveRomTarget(game.platform?.code ?: "misc", game.romFilename).exists() }
+            runBlocking { resolveRomTargetForCheck(game.platform?.code ?: "misc", game.romFilename) }
         } catch (_: Exception) { false }
+    }
+
+    /**
+     * 仅检查 ROM 是否已存在 (不创建空文件).
+     * - DEFAULT 模式: 检查本地 File.exists() + size > 0
+     * - SAF 模式: 仅查目录里有该文件 + size > 0 (不创建)
+     */
+    suspend fun resolveRomTargetForCheck(platformCode: String, filename: String): Boolean {
+        val plat = platformCode.ifBlank { "misc" }
+        return when (prefs.romStorageKind()) {
+            PrefsStore.RomStorageKind.DEFAULT -> {
+                val file = File(prefs.defaultRomStoragePath(), plat).resolve(filename)
+                file.exists() && file.length() > 0
+            }
+            PrefsStore.RomStorageKind.SAF -> {
+                val uriStr = prefs.romStorageSafUri() ?: return false
+                val treeUri = Uri.parse(uriStr)
+                if (!SafFileHelper.hasPersistedPermission(ctx, treeUri)) return false
+                val root = DocumentFile.fromTreeUri(ctx, treeUri) ?: return false
+                val platDir = SafFileHelper.findDir(ctx, root, plat) ?: return false
+                val doc = platDir.findFile(filename) ?: return false
+                doc.length() > 0
+            }
+            PrefsStore.RomStorageKind.LEGACY_PATH -> {
+                val base = prefs.romStorageLegacyPath() ?: prefs.defaultRomStoragePath()
+                val file = File(base, plat).resolve(filename)
+                file.exists() && file.length() > 0
+            }
+        }
     }
 
     fun localPath(game: Game): File =

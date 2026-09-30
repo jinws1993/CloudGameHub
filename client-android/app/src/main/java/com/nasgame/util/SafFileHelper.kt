@@ -63,6 +63,16 @@ object SafFileHelper {
         return current
     }
 
+    /** 只查目录 (不创建). 用于 isLocal() 检查 — 避免 createDirectory 副作用 */
+    fun findDir(ctx: Context, rootTree: DocumentFile, name: String): DocumentFile? {
+        return rootTree.findFile(name)?.takeIf { it.isDirectory }
+    }
+
+    /** 只查文件 (不创建). 用于 isLocal() 检查 — 避免 createFile 空文件副作用 */
+    fun findFile(ctx: Context, dir: DocumentFile, filename: String): DocumentFile? {
+        return dir.findFile(filename)?.takeIf { it.isFile }
+    }
+
     /** 找或创建文件 */
     fun findOrCreateFile(
         ctx: Context,

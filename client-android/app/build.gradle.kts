@@ -16,8 +16,8 @@ android {
         applicationId = "com.nasgame"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
 
         // Inject default server URL via build-time variable if desired
         // buildConfigField("String", "DEFAULT_SERVER", "\"http://192.168.1.100:14322\"")

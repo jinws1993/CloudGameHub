@@ -128,6 +128,60 @@ tar -cf venv.tar -C build_venv .
 
 ---
 
+### 📱 Android 客户端
+
+[`client-android/`](client-android/) 是 **Kotlin + Jetpack Compose + Hilt + Retrofit** 写的原生安卓客户端：
+
+- **登录** — 服务器地址 / 用户名 / 密码
+- **游戏库** — 按平台分类 Tab 切换 + 卡片网格 + 实时搜索排序
+- **下载 ROM** — OkHttp `followRedirects` 跟 302 跳到 115 CDN, 走 App 私有目录, 不占用户可见存储
+- **启动模拟器** — `Intent.ACTION_VIEW` + `FileProvider` 唤起 RetroArch/PPSSPP/ePSXe/DraStic/Citra/Mupen64Plus 等第三方模拟器
+- **进度条 + 后台队列** — 信号量限流 (默认 2 并发, 用户可改)
+- **下载管理页** — 队列状态 / 本地 ROM 列表 / 一键清缓存
+- **设置** — 为每个平台手动配置模拟器包名, 自动检测常用包
+- **串流游玩** (实验) — WebSocket H.264 视频流 + MediaCodec 硬解码
+
+#### 构建客户端
+
+**方式 1 — Android Studio (推荐)**
+```
+1. 打开 Android Studio (Hedgehog 2023.1.1 或更新)
+2. File → Open → 选择 client-android/ 目录
+3. 等待 Gradle sync (首次 5-10 分钟, 下载 SDK + 依赖)
+4. Build → Build Bundle(s) / APK(s) → Build APK(s)
+5. APK 输出: client-android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**方式 2 — 命令行**
+```bash
+cd client-android
+./gradlew assembleDebug
+# APK: app/build/outputs/apk/debug/app-debug.apk
+```
+
+**方式 3 — GitHub Actions (云端编译, 无需本地 Android SDK)**
+Push 到 main 分支后, 自动编译并上传 APK 到 Artifacts。详见 `.github/workflows/android.yml`。
+
+#### 推荐模拟器包名
+
+| 平台 | 模拟器 | 包名 |
+|---|---|---|
+| FC/N64/MD/GBA/GB/GBC | RetroArch | `com.retroarch` |
+| SFC | Snes9x EX+ | `com.explusalpha.Snes9xPlus` |
+| PS1 | Duckstation | `com.github.stenzek.duckstation` |
+| PSP | PPSSPP | `org.ppsspp.ppsspp` |
+| NDS | DraStic (付费) | `com.drastic` |
+| 3DS | Azahar / Citra | `org.citra.citra_emu` |
+| PS2 | AetherSX2 | `xyz.aethersx2` |
+| DC | Flycast | `com.flycastEmu.flycast` |
+| WII/GC | Dolphin | `org.dolphinemu.dolphinemu` |
+| 街机 | MAME4droid / FBNeo | `com.explusalpha.MameEmu` |
+
+打开设置页给对应平台填一个上面包名即可。
+
+
+---
+
 ### ⭐ 如果觉得有用，请点个 Star！
 
 - 这个 repo 是本人 NAS 私用项目整理出的可用版本，**完全免费 + 开源**

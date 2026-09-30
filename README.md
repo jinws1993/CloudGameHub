@@ -99,6 +99,23 @@ tar -cf venv.tar -C build_venv .
 
 ---
 
+### ⭐ 如果觉得有用，请点个 Star！
+
+- 这个 repo 是本人 NAS 私用项目整理出的可用版本，**完全免费 + 开源**
+- 一颗 Star = 给我继续开发的动力 ☕
+- 提 Issue / PR 都很欢迎
+- 看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解如何贡献
+
+### 🤝 致谢 / Thanks
+
+- [ScreenScraper.fr](https://www.screenscraper.fr/) — 游戏元数据
+- [libretro-database](https://github.com/libretro/libretro-database) — LibRetro 元数据
+- [Vue.js](https://vuejs.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [SQLAlchemy](https://www.sqlalchemy.org/) — 基础框架
+- [115 网盘](https://115.com/) — 云盘集成接口
+- 所有贡献者和反馈用户
+
+---
+
 ## English
 
 **NasGameHub** turns your messy retro game ROM collection into a beautiful, Netflix-style game library. It runs on any Linux NAS, scans ROM folders, scrapes metadata from ScreenScraper.fr or any OpenAI-compatible LLM, and exposes a modern Web UI plus native Android/Windows clients for remote play.

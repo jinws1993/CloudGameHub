@@ -1264,7 +1264,7 @@ const Platforms = defineComponent({
 const Settings = defineComponent({
   setup() {
     const cfg = reactive({});
-    const pwd = reactive({ old: '', new: '' });
+    const pwd = reactive({ old: '', new: '', confirm: '' });
     const saved = ref(false);
     const testStatus = ref('');
     const proxyStatus = ref('');
@@ -1400,14 +1400,28 @@ const Settings = defineComponent({
       }
     }
     async function changePwd() {
-      if (!pwd.old || !pwd.new) return alert('请填写旧密码和新密码');
+      if (!pwd.old || !pwd.new || !pwd.confirm) {
+        return alert('请填写旧密码、新密码和确认密码');
+      }
+      if (pwd.new !== pwd.confirm) {
+        return alert('两次输入的新密码不一致, 请重新输入');
+      }
+      if (pwd.new.length < 6) {
+        return alert('新密码长度不能少于 6 位');
+      }
+      if (pwd.old === pwd.new) {
+        return alert('新密码不能与旧密码相同');
+      }
       try {
         const fd = new FormData();
         fd.append('old', pwd.old); fd.append('new', pwd.new);
         await api.post('/api/auth/change-password', fd);
-        alert('密码已修改');
-        pwd.old = ''; pwd.new = '';
-      } catch (e) { alert(e.message); }
+        alert('✓ 密码已修改, 下次请用新密码登录');
+        pwd.old = ''; pwd.new = ''; pwd.confirm = '';
+      } catch (e) {
+        // e.message 是 API 返回的错误详情 (例如 旧密码错误)
+        alert('✗ 修改失败: ' + (e.message || '未知错误'));
+      }
     }
 
     const userJson = localStorage.getItem('nasgame_user');
@@ -1697,15 +1711,22 @@ const Settings = defineComponent({
         ]),
         isAdmin ? h('fieldset', null, [
           h('legend', null, '修改密码'),
+          h('p', { class: 'hint', style: { marginBottom: '12px' } },
+            '新密码需输入两次, 且不少于 6 位'),
           h('div', { class: 'form-group' }, [
             h('label', null, '旧密码'),
             h('input', { type: 'password', value: pwd.old,
               onInput: e => pwd.old = e.target.value }),
           ]),
           h('div', { class: 'form-group' }, [
-            h('label', null, '新密码'),
+            h('label', null, '新密码 (至少 6 位)'),
             h('input', { type: 'password', value: pwd.new,
               onInput: e => pwd.new = e.target.value }),
+          ]),
+          h('div', { class: 'form-group' }, [
+            h('label', null, '确认新密码 (再输一次)'),
+            h('input', { type: 'password', value: pwd.confirm,
+              onInput: e => pwd.confirm = e.target.value }),
           ]),
           h('button', { type: 'button', onClick: changePwd }, '修改密码'),
         ]) : null,

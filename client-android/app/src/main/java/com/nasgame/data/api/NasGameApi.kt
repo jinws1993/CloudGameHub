@@ -64,4 +64,8 @@ interface NasGameApi {
         @Part("old") old: okhttp3.RequestBody,
         @Part("new") new: okhttp3.RequestBody,
     ): Map<String, Boolean>
+
+    /** 检查 115 Cookie 是否还有效 (启动后调一下) */
+    @GET("/api/cloud/115/status")
+    suspend fun cloud115Status(): Cloud115Status
 }

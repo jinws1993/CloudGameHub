@@ -352,6 +352,27 @@ async def test_115_cookie(payload: dict, user: User = Depends(require_admin)):
         return {"ok": False, "error": f"连接错误: {type(e).__name__}: {e}"}
 
 
+@app.get("/api/cloud/115/status")
+async def cloud_115_status(user: User = Depends(current_user)):
+    """检查当前 115 Cookie 是否有效 (不需 admin, 任何登录用户可查).
+
+    返回 {ok: true/false, ...}. 用于 Android 客户端启动后快速检测 Cookie 状态。
+    """
+    from .cloud_115 import Pan115Client, Pan115Error
+    if not settings.cloud_115_enabled:
+        return {"ok": False, "reason": "115 网盘未启用", "fix_url": "/settings"}
+    if not settings.cloud_115_cookie:
+        return {"ok": False, "reason": "未填 115 Cookie", "fix_url": "/settings"}
+    try:
+        async with Pan115Client(settings.cloud_115_cookie, proxy_url="") as cli:
+            r = await cli.login_check()
+            return r
+    except Pan115Error as e:
+        return {"ok": False, "error": str(e), "fix_url": "/settings"}
+    except Exception as e:
+        return {"ok": False, "error": f"连接错误: {type(e).__name__}: {e}", "fix_url": "/settings"}
+
+
 @app.get("/api/cloud/115/list")
 async def cloud_115_list(cid: str = "0", user: User = Depends(require_admin),
                          db: AsyncSession = Depends(get_db)):
@@ -1321,7 +1342,7 @@ async def download_rom(gid: int,
     if g.cloud_source == "115" and g.cloud_pickcode:
         if not settings.cloud_115_enabled or not settings.cloud_115_cookie:
             raise HTTPException(404, "本地无 ROM, 且 115 云盘未启用")
-        from .cloud_115 import Pan115Client
+        from .cloud_115 import Pan115Client, Pan115Error
         proxy = ""  # 115 强制直连, 不用全局代理
         try:
             async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
@@ -1372,7 +1393,7 @@ async def get_rom_info(gid: int,
     if g.cloud_source == "115" and g.cloud_pickcode:
         if not settings.cloud_115_enabled or not settings.cloud_115_cookie:
             raise HTTPException(404, "本地无 ROM, 且 115 云盘未启用")
-        from .cloud_115 import Pan115Client
+        from .cloud_115 import Pan115Client, Pan115Error
         proxy = ""
         try:
             async with Pan115Client(settings.cloud_115_cookie, proxy_url=proxy) as cli:
@@ -1384,6 +1405,12 @@ async def get_rom_info(gid: int,
                 "size": g.rom_size,
                 "pickcode": g.cloud_pickcode,
             }
+        except Pan115Error as e:
+            # 115 API 错误 (例如 cookie 过期 errno 990001 / token invalid 50051)
+            msg = str(e)
+            logger.error(f"115 info fail: {msg}")
+            # 提示用户去 web settings 页重新填 cookie
+            raise HTTPException(502, f"115 网盘调用失败: {msg}. 请到 Web 设置页重新填入 115 Cookie (Cookie 有效期约 1 周).")
         except Exception as e:
             logger.error(f"115 info fail: {e}")
             raise HTTPException(502, f"云盘查询失败: {e}")

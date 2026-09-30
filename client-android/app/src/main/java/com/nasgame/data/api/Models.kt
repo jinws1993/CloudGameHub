@@ -124,3 +124,10 @@ data class StatsResponse(
 
 @Serializable
 data class PlatStat(val platform: String, val count: Int)
+@Serializable
+data class Cloud115Status(
+    val ok: Boolean = false,
+    val reason: String? = null,
+    val error: String? = null,
+    @SerialName("fix_url") val fixUrl: String? = null,
+)

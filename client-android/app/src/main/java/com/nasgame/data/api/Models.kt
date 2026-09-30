@@ -83,14 +83,14 @@ data class PlayLocalResponse(
     @SerialName("download_url") val downloadUrl: String,
     val command: List<String> = emptyList(),
     val intent: IntentSpec? = null,
-    val package: String? = null,
+    @SerialName("package") val pkg: String? = null,
 )
 
 @Serializable
 data class IntentSpec(
     val action: String,
     val data: String,
-    val package: String,
+    @SerialName("package") val pkg: String,
 )
 
 @Serializable

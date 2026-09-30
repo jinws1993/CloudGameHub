@@ -91,4 +91,5 @@ Thumbs.db
 *.pem
 *.key
 *.crt
-*credentials*.json
+*credentials*.jsonrelease/
+.android/

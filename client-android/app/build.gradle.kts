@@ -23,6 +23,16 @@ android {
         // buildConfigField("String", "DEFAULT_SERVER", "\"http://192.168.1.100:14322\"")
     }
 
+    signingConfigs {
+        create("release") {
+            // Keystore is in client-android/keys/nasgame-release.p12
+            storeFile = file("../keys/nasgame-release.p12")
+            storePassword = "nasgamehub2026"
+            keyAlias = "nasgame"
+            keyPassword = "nasgamehub2026"
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -45,7 +55,14 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            // Sign debug builds with release key so installation is consistent across upgrades.
+            // (Without this, debug + release keys would conflict; user would have to uninstall first.)
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

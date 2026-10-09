@@ -15,7 +15,7 @@ android {
         applicationId = "com.cloudgamehub"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
+        versionCode = 12
         versionName = "1.3.0"
 
         // Inject default server URL via build-time variable if desired
@@ -24,13 +24,12 @@ android {
 
     signingConfigs {
         create("release") {
-            // Keystore 保持原样 (文件名/alias/密码都烧在证书里, 改了会签不出同一个身份).
-            // 想彻底改名可以重新生成: keytool -genkeypair -keystore keys/cloudgamehub-release.p12 ...
-            // Keystore is in client-android/keys/nasgame-release.p12
-            storeFile = file("../keys/nasgame-release.p12")
-            storePassword = "nasgamehub2026"
-            keyAlias = "nasgame"
-            keyPassword = "nasgamehub2026"
+            // Keystore 在 client-android/keys/cloudgamehub-release.p12
+            // 2026-10 重新生成过一次 (项目从 NasGameHub 改名过来), 指纹见 keys/FINGERPRINT.txt
+            storeFile = file("../keys/cloudgamehub-release.p12")
+            storePassword = "cloudgamehub2026"
+            keyAlias = "cloudgamehub"
+            keyPassword = "cloudgamehub2026"
         }
     }
 

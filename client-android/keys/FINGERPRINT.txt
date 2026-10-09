@@ -1,1 +1,6 @@
-96:55:EC:6A:F0:BE:DA:00:98:87:DD:57:18:5E:0A:3A:B8:DC:F7:71:0C:5E:EB:59:BB:A3:3A:0A:95:28:6B:10
+# CloudGameHub release keystore 指纹 (当前生效)
+# 校验: apksigner verify --print-certs app-release.apk
+D8:BC:89:BD:E8:25:66:BE:07:EE:4F:3B:8B:34:9F:DC:DF:51:CA:30:86:94:0F:DF:0B:72:EB:0F:49:07:9C:04
+
+# 已废弃 —— NasGameHub 时期的老指纹, 仅供对照排查用
+# 96:55:EC:6A:F0:BE:DA:00:98:87:DD:57:18:5E:0A:3A:B8:DC:F7:71:0C:5E:EB:59:BB:A3:3A:0A:95:28:6B:10

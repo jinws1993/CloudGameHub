@@ -16,6 +16,45 @@
 
 ---
 
+## [r12.1.0] - 2026-10-09
+
+### 🔑 彻底改名 CloudGameHub + 重签 release 密钥
+
+#### GitHub
+- 仓库 `jinws1993/NasGameHub` → **`jinws1993/CloudGameHub`** (旧地址自动跳转)
+- 简介改为强调"单 App, 不需要 NAS 和服务器"
+- topics 重排: 去掉 docker/fastapi/vue3/nas/moonlight/streaming/self-hosted,
+  加上 android/kotlin/jetpack-compose/retroarch/libretro/115-pan/single-app/
+  offline-first/ai-scraper
+- README 徽章重排, 标题改为「装个 APK 就能玩的私人游戏库」
+
+#### Android 包名
+- `com.nasgame` → **`com.cloudgamehub`** (源码目录 + namespace + applicationId)
+- 根项目名 `NASGame` → `CloudGameHub`, 主题 `Theme.NASGame` → `Theme.CloudGameHub`
+- DataStore / SQLite 文件名 `nasgame` → `cloudgamehub`
+- 数据类 `NasDb` → `CloudDb`
+- ProGuard 规则里的包名路径
+- `DownloadManager` 里 App 私有目录的路径判断 (漏了会导致 ROM 被误判成
+  "模拟器能读", 实际读不到)
+- versionCode 10 → 12
+
+#### 签名密钥重新生成
+- 新 `cloudgamehub-release.p12`, alias `cloudgamehub`, `CN=CloudGameHub`
+- SHA-256 指纹 `D8:BC:89:BD:...` (老的 `96:55:EC:6A:...` 已作废, 留档在 FINGERPRINT.txt)
+- 老 keystore 从仓库删除 (git 历史里还能翻出来)
+
+**⚠️ 包名和签名都变了 —— 装过旧版的用户必须先卸载再装。**
+v1.3.0 还没正式发版, 现在是改的最好时机。
+
+#### 服务端 / 脚本 / 文档
+- docker 容器名与镜像名、Python venv 路径、DB/PID 文件名
+- Web UI 的 localStorage key、console 前缀、ScreenScraper softname 与 UA
+- Windows 客户端窗口标题与 APPDATA 目录
+- README / CHANGELOG / CONTRIBUTING / PROMOTION / docs\* /
+  GitHub Actions / Issue 模板 / Dockerfile / install.sh / .env.example
+
+---
+
 ## [r12.0.0] - 2026-10-09
 
 ### 🔥 架构大改: 单 App, 不再需要 NAS

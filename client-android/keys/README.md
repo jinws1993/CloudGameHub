@@ -2,55 +2,55 @@
 
 This directory contains the **release signing keystore** for CloudGameHub Android client.
 
-## ⚠️ 项目改名了, 但 keystore 没改
-
-CloudGameHub v1.3.0 之前这个项目叫 CloudGameHub。包名从 `com.nasgame` 改成了
-`com.cloudgamehub`, **但签名密钥没动** —— 因为 PKCS12 的 alias 和证书主体是烧在
-文件里的, 改了签名身份就变了, 所有装过旧包的用户都得先卸载才能装新的。
-
-所以现在的实际情况:
+## Credentials
 
 | 项 | 值 |
 |----|-----|
-| 文件名 | `nasgame-release.p12` (未改) |
-| Alias | `nasgame` (未改) |
-| 密码 | `nasgamehub2026` (未改) |
-| 证书主体 | `CN=CloudGameHub, O=CloudGameHub, C=CN` (未改) |
-| **App 包名** | `com.cloudgamehub` (**已改**) |
+| 文件 | `cloudgamehub-release.p12` (PKCS12) |
+| Alias | `cloudgamehub` |
+| 密码 | `cloudgamehub2026` (同时写在 `app/build.gradle.kts` 的 `signingConfigs.release`) |
+| 算法 | RSA 2048 + SHA-256 |
+| 有效期 | 2026-10-09 起 9125 天 (~25 年) |
+| 主体 | `CN=CloudGameHub, O=CloudGameHub, C=CN` |
+| SHA-256 | `D8:BC:89:BD:E8:25:66:BE:07:EE:4F:3B:8B:34:9F:DC:DF:51:CA:30:86:94:0F:DF:0B:72:EB:0F:49:07:9C:04` |
 
-`build.gradle.kts` 里的 `signingConfigs.release` 也保持原样指向旧 keystore。
+完整指纹见 `FINGERPRINT.txt`。
 
-想彻底改名的话, 按下面「To rotate」重新生成一份, 然后同步改
-`build.gradle.kts` 的 `storeFile` / `keyAlias` / 密码 —— 但那样所有老用户都
-得重新安装, 自己权衡。
+## 校验
 
-## Files
-- `nasgame-release.p12` — PKCS12 keystore (Android-compatible)
-- `FINGERPRINT.txt` — SHA-256 fingerprint
+```bash
+# 密钥本身能不能打开
+keytool -list -v -keystore cloudgamehub-release.p12 -alias cloudgamehub
+# 出来的指纹应该和 FINGERPRINT.txt 一致
 
-## Credentials
-- **Alias**: `nasgame`
-- **Password**: `nasgamehub2026` (also stored in `signingConfigs.release` in build.gradle.kts)
-- **Validity**: ~25 years from 2026-09-30 (9125 days)
-- **Algorithm**: RSA 2048 + SHA-256
-- **Subject**: `CN=CloudGameHub, O=CloudGameHub, C=CN`
-
-## Fingerprint (SHA-256)
-```
-96:55:EC:6A:F0:BE:DA:00:98:87:DD:57:18:5E:0A:3A:B8:DC:F7:71:0C:5E:EB:59:BB:A3:3A:0A:95:28:6B:10
+# 构建产物对不对得上
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+# SHA-256 certificate digest 应该和上面一致
 ```
 
-## Why committed to repo?
+## 为什么仓库里放着 keystore
 
-This is a **personal/open-source hobby project**. Committing the keystore makes
-CI builds reproducible (same signature = upgrade installs work).
+这是个人/开源项目。把 keystore 提交进仓库能让 CI 每次构建出**同样签名**的包,
+用户下载后可以直接覆盖安装, 不用先卸载。
 
-For Play Store distribution, you'd want to **regenerate** this with a secure offline
-keystore + use GitHub Secrets. But for sideloading (e.g. via this repo's Releases page),
-this is fine — the worst case of a leaked keystore is someone can publish fake updates
-to your users, which you can counter by bumping `versionCode` + pushing a new keystore.
+真要上 Google Play 的话, 应该换成离线保管的密钥 + GitHub Secrets, 不入库。
+但对于侧载 (比如本仓库 Releases 页分发) 够用了 —— 万一泄露, 最坏结果是
+有人能发假更新, 应对办法是抬 `versionCode` + 换一把新密钥。
 
-## To rotate (改名字 / 泄露了都走这个)
+## 历史
+
+| 时间 | 变化 |
+|------|------|
+| 2026-09-30 | 初次生成 (`CN=NasGameHub`), 指纹 `96:55:EC:...` |
+| 2026-10-09 | 项目改名为 CloudGameHub, 重新生成 (`CN=CloudGameHub`), 指纹 `D8:BC:89:...` |
+
+**换密钥 = 换签名身份。** 装过旧包 (`com.nasgame`) 的用户必须先卸载,
+因为包名和签名都变了, Android 不允许用不同签名覆盖安装。
+
+老密钥在 git 历史里, 需要的话可以翻出来:
+`git show <old-commit>:client-android/keys/nasgame-release.p12`
+
+## 轮换
 
 ```bash
 cd client-android/keys
@@ -58,12 +58,10 @@ keytool -genkey -v -keystore cloudgamehub-release.p12 -alias cloudgamehub \
   -keyalg RSA -keysize 2048 -validity 9125 \
   -storepass cloudgamehub2026 -keypass cloudgamehub2026 \
   -dname "CN=CloudGameHub, O=CloudGameHub, C=CN"
-# 然后改 app/build.gradle.kts 的 storeFile / keyAlias / 两个密码
-# 最后更新 FINGERPRINT.txt 并提交
-```
 
-To verify the published APK matches this keystore:
-```bash
-apksigner verify --print-certs app-release.apk
-# Should match SHA-256 fingerprint above
+# 换完记得:
+# 1. 更新 FINGERPRINT.txt
+# 2. 同步 app/build.gradle.kts 的 alias/密码 (如果改了)
+# 3. 抬 versionCode
+# 4. 告诉用户要卸载重装
 ```

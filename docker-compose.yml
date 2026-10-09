@@ -1,15 +1,15 @@
-# NasGameHub - one-click Docker deployment
+# CloudGameHub - one-click Docker deployment
 # Default port 14322 (override with NASGAME_PORT)
 # Data and ROMs are persisted under ./data on the host.
 
 services:
-  nasgame:
+  cloudgamehub:
     # Image pre-built offline; no network build at startup.
-    image: nasgame:latest
+    image: cloudgamehub:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nasgame
+    container_name: cloudgamehub
     restart: unless-stopped
     ports:
       - "${NASGAME_PORT:-14322}:14322"

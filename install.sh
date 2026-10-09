@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NASGame Docker 一键安装脚本 - 在飞牛OS / Linux 主机上运行
+# CloudGameHub Docker 一键安装脚本 - 在飞牛OS / Linux 主机上运行
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  NASGame Docker 一键安装 / 启动${NC}"
+echo -e "${BLUE}  CloudGameHub Docker 一键安装 / 启动${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 # 必要镜像检查
@@ -44,7 +44,7 @@ fi
 
 # Docker build (完全离线)
 echo -e "${YELLOW}>> 构建 Docker 镜像...${NC}"
-docker build -t nasgame:latest . 2>&1 | tail -10
+docker build -t cloudgamehub:latest . 2>&1 | tail -10
 
 # 启动
 if docker compose version >/dev/null 2>&1; then
@@ -57,7 +57,7 @@ else
 fi
 
 # 停掉旧容器 (如果存在)
-docker rm -f nasgame 2>/dev/null || true
+docker rm -f cloudgamehub 2>/dev/null || true
 
 echo -e "${YELLOW}>> 启动容器...${NC}"
 $COMPOSE_CMD up -d
@@ -77,7 +77,7 @@ HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  ✅ NASGame Docker 部署成功${NC}"
+echo -e "${GREEN}  ✅ CloudGameHub Docker 部署成功${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "  管理界面:  ${BLUE}http://${HOST_IP}:${PORT}/${NC}"
@@ -91,5 +91,5 @@ echo -e "  📋 常用命令:"
 echo -e "     ${BLUE}${COMPOSE_CMD} logs -f${NC}       # 查看日志"
 echo -e "     ${BLUE}${COMPOSE_CMD} restart${NC}       # 重启"
 echo -e "     ${BLUE}${COMPOSE_CMD} down${NC}          # 停止并删除容器"
-echo -e "     ${BLUE}docker build -t nasgame:latest . && ${COMPOSE_CMD} up -d${NC}  # 升级"
+echo -e "     ${BLUE}docker build -t cloudgamehub:latest . && ${COMPOSE_CMD} up -d${NC}  # 升级"
 echo ""

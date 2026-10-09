@@ -1,4 +1,4 @@
-"""NASGame Windows client - PySide6."""
+"""CloudGameHub Windows client - PySide6."""
 import sys
 import os
 import subprocess
@@ -18,7 +18,7 @@ from PySide6.QtGui import QPixmap, QIcon, QDesktopServices
 import requests
 
 
-APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "NASGame"
+APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "CloudGameHub"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_DIR / "config.json"
 ROM_CACHE = APP_DIR / "roms"
@@ -140,7 +140,7 @@ class Worker(QThread):
 class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("连接 NASGame 服务器")
+        self.setWindowTitle("连接 CloudGameHub 服务端")
         self.resize(380, 220)
 
         layout = QFormLayout(self)
@@ -231,7 +231,7 @@ class EmulatorDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NASGame")
+        self.setWindowTitle("CloudGameHub")
         self.resize(1280, 800)
 
         self.config = load_config()
@@ -482,7 +482,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("NASGame")
+    app.setApplicationName("CloudGameHub")
     app.setStyle("Fusion")
 
     # dark palette

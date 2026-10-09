@@ -1,10 +1,10 @@
-// NasGameHub v=r11 - 2026-09-30 15:25 build (rebrand to NasGameHub)
-console.log("%c[NasGameHub] 版本 r11 已加载", "color:#0f0;font-weight:bold;font-size:14px", "build: 2026-09-30 15:25");
-// NASGame app.js v=20260930-modal-v2 (13:12)
+// CloudGameHub v=r11 - 2026-09-30 15:25 build (rebrand to CloudGameHub)
+console.log("%c[CloudGameHub] 版本 r11 已加载", "color:#0f0;font-weight:bold;font-size:14px", "build: 2026-09-30 15:25");
+// CloudGameHub app.js v=20260930-modal-v2 (13:12)
 
-// NASGame app.js v=20260930-modal (13:10)
+// CloudGameHub app.js v=20260930-modal (13:10)
 
-// NASGame SPA - pure render-function Vue3
+// CloudGameHub SPA - pure render-function Vue3
 const { createApp, ref, reactive, computed, onMounted, onUnmounted,
         watch, h, defineComponent, provide, inject } = Vue;
 
@@ -17,18 +17,18 @@ if (typeof window !== 'undefined' && window.__NASGAME_DEV_HOOK__) {
     const _qs = new URLSearchParams(location.search);
     const _tt = _qs.get('test_token');
     if (_tt) {
-      localStorage.setItem('nasgame_token', _tt);
-      console.log('[NasGameHub] Test token injected via URL');
+      localStorage.setItem('cloudgamehub_token', _tt);
+      console.log('[CloudGameHub] Test token injected via URL');
     }
   } catch (e) {}
 }
 
 const api = {
-  token: localStorage.getItem('nasgame_token') || '',
+  token: localStorage.getItem('cloudgamehub_token') || '',
   setToken(t) {
     this.token = t || '';
-    if (t) localStorage.setItem('nasgame_token', t);
-    else localStorage.removeItem('nasgame_token');
+    if (t) localStorage.setItem('cloudgamehub_token', t);
+    else localStorage.removeItem('cloudgamehub_token');
   },
   async req(path, opts = {}) {
     const headers = { ...(opts.headers || {}) };
@@ -293,9 +293,9 @@ legend{padding:0 8px;color:var(--text-dim);font-size:13px;font-weight:600;text-t
 .upload-result.error{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);color:var(--danger);}
 `;
 
-if (!document.getElementById('nasgame-styles')) {
+if (!document.getElementById('cloudgamehub-styles')) {
   const s = document.createElement('style');
-  s.id = 'nasgame-styles';
+  s.id = 'cloudgamehub-styles';
   s.textContent = STYLES;
   document.head.appendChild(s);
 }
@@ -332,7 +332,7 @@ const Login = defineComponent({
       h('div', { class: 'login-card' }, [
         h('div', { class: 'logo' }, [
           h('div', { class: 'logo-icon' }, '🎮'),
-          h('h1', null, 'NasGameHub'),
+          h('h1', null, 'CloudGameHub'),
           h('p', null, '让游戏管理像电影一样简单'),
         ]),
         h('form', { onSubmit: e => { e.preventDefault(); doLogin(); } }, [
@@ -897,7 +897,7 @@ const Library = defineComponent({
 });
 
 function detailView(g, state, { onClose, onToggleFav, onRescrape, onDelete, onCustomSearchDone }) {
-  const userJson = localStorage.getItem('nasgame_user');
+  const userJson = localStorage.getItem('cloudgamehub_user');
   let isAdmin = false;
   try { isAdmin = userJson ? JSON.parse(userJson).is_admin : false; } catch (e) {}
   const ds = state;  // reactive state owned by parent setup (跨渲染持久)
@@ -919,17 +919,17 @@ function detailView(g, state, { onClose, onToggleFav, onRescrape, onDelete, onCu
     ds.customSearching = true;
     ds.customSearchError = '';
     ds.customSearchResult = null;
-    console.log('[NASGame] submitCustomSearch name=', name);
+    console.log('[CloudGameHub] submitCustomSearch name=', name);
     try {
       const r = await api.post('/api/games/' + g.id + '/scrape-search',
         { custom_name: name });
-      console.log('[NASGame] scrape-search response:', r);
+      console.log('[CloudGameHub] scrape-search response:', r);
       ds.customSearchResult = r;
       // 重置上传状态 (新搜次结果后, 旧的覆盖预览被覆盖)
       ds.coverUploading = false;
       ds.coverError = '';
     } catch (e) {
-      console.error('[NASGame] scrape-search error:', e);
+      console.error('[CloudGameHub] scrape-search error:', e);
       ds.customSearchError = '✗ ' + (e.message || '搜索失败');
     } finally {
       ds.customSearching = false;
@@ -972,7 +972,7 @@ function detailView(g, state, { onClose, onToggleFav, onRescrape, onDelete, onCu
       // 成功后回调刷新游戏详情 (封面立即可见)
       if (onCustomSearchDone) onCustomSearchDone();
     } catch (e) {
-      console.error('[NASGame] cover upload:', e);
+      console.error('[CloudGameHub] cover upload:', e);
       ds.coverError = e.message || '上传失败';
     } finally {
       ds.coverUploading = false;
@@ -1424,7 +1424,7 @@ const Settings = defineComponent({
       }
     }
 
-    const userJson = localStorage.getItem('nasgame_user');
+    const userJson = localStorage.getItem('cloudgamehub_user');
     let isAdmin = false;
     try { isAdmin = userJson ? JSON.parse(userJson).is_admin : false; } catch (e) {}
 
@@ -1961,12 +1961,12 @@ const Cloud115 = defineComponent({
       pickerOpen.value = false;
     }
     async function pickerNavigate(cid, nameHint) {
-      console.log('[NASGame] pickerNavigate cid=', cid, 'nameHint=', nameHint);
+      console.log('[CloudGameHub] pickerNavigate cid=', cid, 'nameHint=', nameHint);
       pickerLoading.value = true;
       pickerError.value = '';
       try {
         const r = await api.get('/api/cloud/115/list?cid=' + cid);
-        console.log('[NASGame] pickerNavigate r.items count=', r.items?.length, 'path=', r.path);
+        console.log('[CloudGameHub] pickerNavigate r.items count=', r.items?.length, 'path=', r.path);
         if (!r.ok) {
           pickerError.value = r.error || '加载失败';
           pickerItems.value = [];
@@ -2374,7 +2374,7 @@ const AppRoot = defineComponent({
         const r = await api.get('/api/auth/me');
         user.username = r.username;
         user.is_admin = r.is_admin;
-        localStorage.setItem('nasgame_user', JSON.stringify(r));
+        localStorage.setItem('cloudgamehub_user', JSON.stringify(r));
       } catch (e) {
         api.setToken(''); location.reload();
       }
@@ -2390,7 +2390,7 @@ const AppRoot = defineComponent({
       h('aside', { class: 'sidebar' }, [
         h('div', { class: 'brand' }, [
           h('span', { class: 'brand-icon' }, '🎮'),
-          h('span', null, 'NasGameHub'),
+          h('span', null, 'CloudGameHub'),
         ]),
         h('nav', null, menu.map(m =>
           h('a', {

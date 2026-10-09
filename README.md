@@ -1,12 +1,19 @@
-# NasGameHub - 让游戏管理像电影一样简单
+# CloudGameHub - 装个 APK 就能玩的私人游戏库
 
 ![Social Preview](docs/images/social-preview.png)
 
-> **Manage your retro game library like Netflix manages movies.**
+> **Your retro game library lives in your 115 cloud. One APK, no server, no NAS.**
 >
-> 📂 一键连接 115 网盘 · 自动导入 ROM · 客户端点一下就到手机本地模拟器
+> 📦 ROM 放 115 网盘 · 装个 APK · 点一下就开玩 · 玩完删掉也不心疼
 
-[![docker](https://img.shields.io/badge/docker-ready-blue)](https://www.docker.com/) [![python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/) [![android](https://img.shields.io/badge/android-8%2B-green)](https://developer.android.com/) [![windows](https://img.shields.io/badge/windows-10%2B-blue)](https://www.microsoft.com/) [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![android](https://img.shields.io/badge/android-8%2B-green)](https://developer.android.com/)
+[![kotlin](https://img.shields.io/badge/kotlin-2.0-purple)](https://kotlinlang.org/)
+[![compose](https://img.shields.io/badge/jetpack--compose-blue)](https://developer.android.com/jetpack/compose)
+[![retroarch](https://img.shields.io/badge/retroarch-integrated-black)](https://www.retroarch.com/)
+[![115](https://img.shields.io/badge/115--pan-DFS200-blue)](https://115.com/)
+[![no-server](https://img.shields.io/badge/no--server--no--NAS-brightgreen)]()
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![stars](https://img.shields.io/github/stars/jinws1993/CloudGameHub?style=social)](https://github.com/jinws1993/CloudGameHub/stargazers)
 
 [简体中文](#简体中文) · [English](#english)
 
@@ -14,7 +21,7 @@
 
 ## ⚠️ 架构调整公告 (2026-10)
 
-**安卓客户端已经重写成完全独立的单 App —— 不再需要 NAS 和服务器。**
+**CloudGameHub 就是一个 APK —— 不需要 NAS, 不需要服务器, 不需要注册。**
 
 ```
 旧:  115 → NAS (Docker 服务端) → Android 客户端
@@ -31,19 +38,22 @@
 **本仓库里的 `server/` 和 `client-windows/` 目前保留但已停更**, 作为历史实现参考。
 新功能全部集中在 `client-android/`。
 
+> 📌 本项目 v1.3.0 之前叫 **NasGameHub**。包名从 `com.nasgame` 改成了 `com.cloudgamehub`,
+> 所以装过旧版的话需要先卸载再装。签名密钥刻意没改 (见 `client-android/keys/README.md`)。
+
 详细说明见 **[client-android/README.md](client-android/README.md)**。
 
 ---
 
 ## 简体中文 (旧版: NAS 部署方案)
 
-NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深度集成 **115 网盘**作为游戏 ROM 的天然存放和分发中心——把游戏 ROM 存在 115 上，NasGameHub 自动连接并整理为漂亮游戏库；**手机客户端一键点下，ROM 就直接下载到手机本地模拟器开玩**。中间不占 NAS 硬盘，下载流量走 115，玩游戏完全本地。
+CloudGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深度集成 **115 网盘**作为游戏 ROM 的天然存放和分发中心——把游戏 ROM 存在 115 上，CloudGameHub 自动连接并整理为漂亮游戏库；**手机客户端一键点下，ROM 就直接下载到手机本地模拟器开玩**。中间不占 NAS 硬盘，下载流量走 115，玩游戏完全本地。
 
 ### 🎬 典型场景：115 网盘 → 手机本地游玩
 
 ```
 1. 你在 115 网盘上有一个 /roms/FC/、/roms/SFC/、/roms/PS1/... 的目录
-2. NasGameHub 扫码连上你的 115 账号
+2. CloudGameHub 扫码连上你的 115 账号
 3. 后台自动扫描 115 目录结构 → AI + ScreenScraper 刮削封面/简介/中文译名
 4. 手机打开 Android 客户端 → 看到与《斗破黑夜》一样的漂亮游戏列表
 5. 点游戏 → ROM 从 115 高速下载到手机本地 (走 115 CDN)
@@ -85,7 +95,7 @@ NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深�
                           │                              └─────────────────────────┘
                           ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                  NasGameHub Docker 容器                              │
+│                  CloudGameHub Docker 容器                              │
 │   ┌────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐  │
 │   │ FastAPI 后端│  │ SQLite 数据库│  │  媒体文件    │  │ ROM 库  │  │
 │   │   (uvicorn) │  │  (data/db)   │  │ (data/media) │  │(data/  │  │
@@ -105,8 +115,8 @@ NasGameHub 是一个**部署在 NAS / Linux 上的私人游戏库管家**，深�
 **前提**：Linux NAS / 飞牛 OS / Debian / Ubuntu + Docker 20.10+ + Docker Compose v2。
 
 ```bash
-git clone https://github.com/<你的用户名>/NasGameHub.git
-cd NasGameHub
+git clone https://github.com/<你的用户名>/CloudGameHub.git
+cd CloudGameHub
 
 # 1. 复制环境变量模板, 按需修改
 cp .env.example .env
@@ -129,7 +139,7 @@ python3.11 -m venv build_venv
 source build_venv/bin/activate
 pip install -r server/requirements.txt
 tar -cf venv.tar -C build_venv .
-# 把 venv.tar 复制到 NasGameHub 项目根目录, 再 docker build
+# 把 venv.tar 复制到 CloudGameHub 项目根目录, 再 docker build
 ```
 
 如果项目根目录有 `venv.tar`，Dockerfile 会优先使用；没有就走 `pip install -r requirements.txt`。
@@ -224,12 +234,12 @@ Push 到 main 分支后, 自动编译并上传 APK 到 Artifacts。详见 `.gith
 
 ## English
 
-**NasGameHub** turns your messy retro game ROM collection into a beautiful, Netflix-style game library. It's deeply integrated with **115 cloud disk** (China's biggest personal cloud storage) so ROMs live in your 115 cloud, get auto-organized into a scraped library, and **download straight to a local emulator on your phone or PC with a single tap** — almost zero NAS disk used, traffic routed through 115's CDN.
+**CloudGameHub** turns your messy retro game ROM collection into a beautiful, Netflix-style game library. It's deeply integrated with **115 cloud disk** (China's biggest personal cloud storage) so ROMs live in your 115 cloud, get auto-organized into a scraped library, and **download straight to a local emulator on your phone or PC with a single tap** — almost zero NAS disk used, traffic routed through 115's CDN.
 
 ### 🎬 The typical flow: 115 cloud → local play
 
 1. You keep ROMs in a 115 cloud folder (e.g. `/roms/FC/`, `/roms/SFC/`, `/roms/PS1/`)
-2. NasGameHub scans the directory tree, scrapes covers + Chinese/English titles + summaries via AI + ScreenScraper
+2. CloudGameHub scans the directory tree, scrapes covers + Chinese/English titles + summaries via AI + ScreenScraper
 3. Your phone opens the Android client and sees a Netflix-style game library
 4. Tap a game → ROM streams down from 115 → emulator launches automatically → you play locally
 
@@ -250,8 +260,8 @@ No pre-bulk-downloading the ROM library to your NAS. Your phone downloads only w
 ### 🚀 One-line install
 
 ```bash
-git clone https://github.com/<your-username>/NasGameHub.git
-cd NasGameHub
+git clone https://github.com/<your-username>/CloudGameHub.git
+cd CloudGameHub
 cp .env.example .env       # edit AI key, admin password, etc.
 docker compose up -d
 # Visit http://NAS_IP:14322/   (default admin / admin123, password change on first login)

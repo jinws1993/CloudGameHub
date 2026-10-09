@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 NasGameHub contributors
+Copyright (c) 2025 CloudGameHub contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@ SOFTWARE.
 ================================================================================
 NOTE on third-party content
 ================================================================================
-NasGameHub is a metadata-management tool. It does NOT bundle any commercial ROMs,
+CloudGameHub is a metadata-management tool. It does NOT bundle any commercial ROMs,
 game cover art, or game descriptions. All scraped metadata is fetched at runtime
 from third-party services (ScreenScraper.fr, OpenAI-compatible APIs, 115 cloud
 disk). Users are responsible for ensuring they have the legal right to download

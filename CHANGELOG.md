@@ -124,7 +124,7 @@
 
 ### 🎉 首次发布 / Initial Release
 
-NasGameHub 项目首次公开发布。71 files / 11215 lines。
+CloudGameHub 项目首次公开发布。71 files / 11215 lines。
 
 #### ✨ Features
 - **25 平台自动扫描归类**: FC / SFC / N64 / GB / GBC / GBA / NDS / 3DS / MD / DC / PS1 / PS2 / PSP / Wii / GC / PCE / NeoGeo / MAME / 街机 / J2ME / DOS / Windows / Flash / HTML
@@ -169,6 +169,6 @@ NasGameHub 项目首次公开发布。71 files / 11215 lines。
 - 115 云盘 1000+ 文件全量导入
 - 离线环境 (内网无 PyPI) 部署
 
-[Unreleased]: https://github.com/jinws1993/NasGameHub/compare/main...HEAD
-[r11.0.0]: https://github.com/jinws1993/NasGameHub/releases/tag/r11.0.0
-[0.x]: https://github.com/jinws1993/NasGameHub/commits/main
+[Unreleased]: https://github.com/jinws1993/CloudGameHub/compare/main...HEAD
+[r11.0.0]: https://github.com/jinws1993/CloudGameHub/releases/tag/r11.0.0
+[0.x]: https://github.com/jinws1993/CloudGameHub/commits/main

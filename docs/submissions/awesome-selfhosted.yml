@@ -1,5 +1,5 @@
-name: NasGameHub
-website_url: https://github.com/jinws1993/NasGameHub
+name: CloudGameHub
+website_url: https://github.com/jinws1993/CloudGameHub
 description: Netflix-style retro game library manager with 115 cloud disk integration; clients download ROMs straight from 115 to local emulators.
 licenses:
   - MIT
@@ -9,5 +9,5 @@ platforms:
   - Docker
 tags:
   - Games - Administrative Utilities & Control Panels
-source_code_url: https://github.com/jinws1993/NasGameHub
+source_code_url: https://github.com/jinws1993/CloudGameHub
 depends_3rdparty: true

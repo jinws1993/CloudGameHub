@@ -1,10 +1,10 @@
-# NASGame Windows 客户端
+# CloudGameHub Windows 客户端
 
 极简 Python 客户端,使用 PySide6 + 系统 WebView。
 
 ## 功能
 
-- 连接 NASGame 服务器 (输入 IP/账号/密码)
+- 连接 CloudGameHub 服务端 (输入 IP/账号/密码)
 - 浏览游戏库 (与 Web 管理界面一致的视图)
 - 一键下载 ROM 到本地
 - 配置每个平台的模拟器路径

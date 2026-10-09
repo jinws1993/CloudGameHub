@@ -96,13 +96,13 @@ jobs:
         working-directory: client-android
         run: |
           cp app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/nasgame-${{ steps.ver.outputs.version_name }}-release.apk
+             app/build/outputs/apk/release/cloudgamehub-${{ steps.ver.outputs.version_name }}-release.apk
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: nasgame-release-${{ steps.ver.outputs.version_name }}
-          path: client-android/app/build/outputs/apk/release/nasgame-${{ steps.ver.outputs.version_name }}-release.apk
+          path: client-android/app/build/outputs/apk/release/cloudgamehub-${{ steps.ver.outputs.version_name }}-release.apk
           if-no-files-found: error
           retention-days: 90
 
@@ -153,7 +153,7 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') }}
           files: |
-            nasgame-*.apk
+            cloudgamehub-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -174,10 +174,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version_name }}
-          name: NasGameHub v${{ needs.build.outputs.version_name }}
+          name: CloudGameHub v${{ needs.build.outputs.version_name }}
           generate_release_notes: true
           draft: false
           files: |
-            nasgame-*.apk
+            cloudgamehub-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -9,7 +9,7 @@
 ### 1. 项目结构
 
 ```
-NasGameHub/
+CloudGameHub/
 ├── server/                       # 后端 + Web 前端
 │   ├── app/                      # Python 后端 (FastAPI)
 │   │   ├── main.py               # FastAPI 应用 + 路由
@@ -34,7 +34,7 @@ NasGameHub/
 ├── client-android/               # Android 客户端 (Kotlin)
 ├── client-windows/               # Windows 客户端 (PySide6)
 ├── data/                         # 运行时数据 (gitignored)
-│   ├── db/nasgame.db             # SQLite
+│   ├── db/cloudgamehub.db             # SQLite
 │   ├── roms/                     # ROM 文件
 │   ├── media/                    # 刮削封面/截图/视频
 │   ├── config/config.json        # 用户配置 (AI key 等)
@@ -166,10 +166,10 @@ async def _collect_metadata(self, game, ss_client, custom_name, prefer_ai):
 NASGAME_MOCK_AI=1 docker compose up
 
 # 查看 API 调用日志
-docker compose logs -f nasgame | grep -i "scrape\|AI\|115"
+docker compose logs -f cloudgamehub | grep -i "scrape\|AI\|115"
 
 # 浏览器开发者工具 → Network 看具体 HTTP 请求
-# 浏览器开发者工具 → Console 看前端 [NasGame] 标签的 log
+# 浏览器开发者工具 → Console 看前端 [CloudGameHub] 标签的 log
 ```
 
 ### 8. 提交 PR
@@ -226,7 +226,7 @@ Implement a client class (see `scraper.py`), then hook into `ScrapeEngine._colle
 ### 7. Debugging
 
 - `NASGAME_MOCK_AI=1 docker compose up` — Mock AI without real keys
-- `docker compose logs -f nasgame` — Live server logs
+- `docker compose logs -f cloudgamehub` — Live server logs
 - Browser DevTools → Network — Inspect HTTP
 
 ### 8. Contributing

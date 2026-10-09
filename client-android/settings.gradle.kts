@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "NASGame"
+rootProject.name = "CloudGameHub"
 include(":app")

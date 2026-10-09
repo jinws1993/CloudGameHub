@@ -1,4 +1,4 @@
-# NASGame 安卓客户端
+# CloudGameHub 安卓客户端
 
 > **单 App 私有游戏库** —— 装一个 APK 就完事, 不需要 NAS, 不需要服务器。
 > ROM 全部放在 115 网盘上, 玩的时候才下到手机, 玩完删掉也不心疼。
@@ -47,7 +47,7 @@ App 设置页有跳转按钮, 也可以直接去
 
 **这一步不做, 点了「游玩」也开不了游戏。**
 
-默认的 App 私有目录 (`/sdcard/Android/data/com.nasgame/files/roms`) **RetroArch
+默认的 App 私有目录 (`/sdcard/Android/data/com.cloudgamehub/files/roms`) **RetroArch
 读不到** —— Android 11+ 上别的 app 无权访问别的 app 的私有目录。
 
 设置 →「ROM 存放位置」→ 选一个公共目录, 比如 `/sdcard/RetroArch/roms`。
@@ -60,7 +60,7 @@ App 会自动按平台建子目录 (`FC/`、`SFC/`…)。
 ## 目录结构
 
 ```
-app/src/main/java/com/nasgame/
+app/src/main/java/com/cloudgamehub/
 ├── App.kt                          # Application + Hilt
 ├── MainActivity.kt                 # 入口, 启动时检查 115 登录态
 ├── data/
@@ -174,7 +174,7 @@ OpenAI / DeepSeek / Kimi / 通义 / MiniMax, 本地 Ollama 也行
 
 **buildbot 在国内经常连不上**, 这时候设置页会提示你去 RetroArch 的
 「在线更新 → 核心下载」里手动装 —— App 的 [RetroArchManager](
-app/src/main/java/com/nasgame/emulator/RetroArchManager.kt) 会自动发现
+app/src/main/java/com/cloudgamehub/emulator/RetroArchManager.kt) 会自动发现
 RetroArch 已经装好的核心。
 
 **RA 没有核心的平台** (buildbot 上确实不存在, 需要独立 App):
@@ -199,7 +199,7 @@ RA 不认 `ACTION_VIEW`, 认自己那套 extra。代码里按官方契约拼, �
 4. 系统 chooser
 ```
 
-踩过的坑 (都在 [EmulatorLauncher](app/src/main/java/com/nasgame/emulator/EmulatorLauncher.kt)
+踩过的坑 (都在 [EmulatorLauncher](app/src/main/java/com/cloudgamehub/emulator/EmulatorLauncher.kt)
 里处理了):
 
 1. **`LIBRETRO` 必须是完整路径**, 不能只给 core 文件名 —— 2025-01-17 之后的

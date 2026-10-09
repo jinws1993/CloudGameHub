@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Paths (resolved relative to DATA_DIR at startup)
     roms_dir: Path = DATA_DIR / "roms"
     media_dir: Path = DATA_DIR / "media"
-    db_path: Path = DATA_DIR / "db" / "nasgame.db"
+    db_path: Path = DATA_DIR / "db" / "cloudgamehub.db"
     logs_dir: Path = DATA_DIR / "logs"
 
     # Scraper

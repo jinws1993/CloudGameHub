@@ -59,8 +59,8 @@ docker compose version
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/<你的用户名>/NasGameHub.git
-cd NasGameHub
+git clone https://github.com/<你的用户名>/CloudGameHub.git
+cd CloudGameHub
 
 # 2. 复制环境配置
 cp .env.example .env
@@ -81,7 +81,7 @@ mkdir -p data/roms/{fc,sfc,n64,gb,gbc,gba,nds,3ds,md,dc,ps1,ps2,psp,wii,gc,pce,n
 docker compose up -d
 
 # 6. 查看日志
-docker compose logs -f nasgame
+docker compose logs -f cloudgamehub
 
 # 7. 浏览器访问
 #    http://NAS_IP:14322/
@@ -103,17 +103,17 @@ deactivate
 tar -cf venv.tar -C build_venv .   # 注意是 build_venv 内的内容
 ```
 
-把 `venv.tar` 复制到 NAS 上 `NasGameHub/` 根目录即可。Dockerfile 检测到 `venv.tar` 会优先使用，跳过 `pip install`。
+把 `venv.tar` 复制到 NAS 上 `CloudGameHub/` 根目录即可。Dockerfile 检测到 `venv.tar` 会优先使用，跳过 `pip install`。
 
 #### 5.2 镜像导出/导入
 
 ```bash
 # 有网机器 build + 导出
-docker build -t nasgamehub:latest .
-docker save nasgamehub:latest | gzip > nasgamehub.tar.gz
+docker build -t cloudgamehub:latest .
+docker save cloudgamehub:latest | gzip > cloudgamehub.tar.gz
 
 # NAS 上
-gunzip -c nasgamehub.tar.gz | docker load
+gunzip -c cloudgamehub.tar.gz | docker load
 docker compose up -d
 ```
 
@@ -124,10 +124,10 @@ docker compose up -d
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name nasgame.example.com;
+    server_name cloudgamehub.example.com;
 
-    ssl_certificate     /etc/letsencrypt/live/nasgame.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/nasgame.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/cloudgamehub.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloudgamehub.example.com/privkey.pem;
 
     client_max_body_size 500M;   # ROM 上传 / 截图上传
 
@@ -148,7 +148,7 @@ server {
 #### 6.2 Caddy
 
 ```caddy
-nasgame.example.com {
+cloudgamehub.example.com {
     reverse_proxy 127.0.0.1:14322 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
@@ -159,7 +159,7 @@ nasgame.example.com {
 ### 7. 升级
 
 ```bash
-cd NasGameHub
+cd CloudGameHub
 git pull
 docker compose build
 docker compose up -d
@@ -169,12 +169,12 @@ docker compose up -d
 ### 8. 卸载
 
 ```bash
-cd NasGameHub
+cd CloudGameHub
 docker compose down        # 停容器
 # 删数据 (会丢失所有游戏元数据):
 rm -rf data/
 # 删镜像:
-docker rmi nasgamehub:latest
+docker rmi cloudgamehub:latest
 ```
 
 ### 9. 故障排查
@@ -182,7 +182,7 @@ docker rmi nasgamehub:latest
 | 问题 | 排查 |
 |---|---|
 | **端口被占** | `lsof -i:14322` 或 `netstat -tlnp \| grep 14322` 看谁占；改 `.env` 的 `NASGAME_PORT` |
-| **容器一直重启** | `docker compose logs --tail=50 nasgame` 看启动日志；多半是 `data/` 权限问题 |
+| **容器一直重启** | `docker compose logs --tail=50 cloudgamehub` 看启动日志；多半是 `data/` 权限问题 |
 | **AI 识别返回 404** | 检查 `.env` 的 `NASGAME_AI_API_KEY` 是否有效；浏览器开发者工具 → Network 看具体错误 |
 | **SS 403** | devid/devpass 没填，去 https://www.screenscraper.fr 申请 |
 | **115 Cookie 失效** | 重新扫码登录；浏览器开发者工具复制最新 cookie 粘贴 |
@@ -225,8 +225,8 @@ docker rmi nasgamehub:latest
 ### 4. Install
 
 ```bash
-git clone https://github.com/<your-username>/NasGameHub.git
-cd NasGameHub
+git clone https://github.com/<your-username>/CloudGameHub.git
+cd CloudGameHub
 cp .env.example .env
 # Edit .env: change NASGAME_ADMIN_PASSWORD and NASGAME_AI_API_KEY
 docker compose up -d

@@ -1,5 +1,5 @@
 # ============================================================
-# NasGameHub Android — ProGuard / R8 rules
+# CloudGameHub Android — ProGuard / R8 rules
 #
 # 这个文件之前根本没建, 但 build.gradle.kts 的 release buildType 引用了它,
 # 导致 `./gradlew assembleRelease` 直接失败。加上了。
@@ -43,8 +43,8 @@
 
 # ---- 我们的数据模型 ----
 # 全部走 SQLiteOpenHelper 手写映射, 不需要反射保活; 但字段名要留着方便排查
--keep class com.nasgame.data.model.** { *; }
+-keep class com.cloudgamehub.data.model.** { *; }
 
 # ---- 模拟器集成 ----
 # 包名常量字符串必须完整保留 (不能被裁掉字符串)
--keepclassmembers class com.nasgame.emulator.RetroArchManager$Companion { *; }
+-keepclassmembers class com.cloudgamehub.emulator.RetroArchManager$Companion { *; }

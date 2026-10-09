@@ -1,8 +1,8 @@
-# 贡献指南 / Contributing to NasGameHub
+# 贡献指南 / Contributing to CloudGameHub
 
 > [简体中文](#简体中文) · [English](#english)
 
-感谢考虑为 NasGameHub 添砖加瓦！🎮
+感谢考虑为 CloudGameHub 添砖加瓦！🎮
 
 ---
 
@@ -10,12 +10,12 @@
 
 ### 报告 Bug / 提功能请求
 
-1. **搜 [已有 issues](https://github.com/jinws1993/NasGameHub/issues)** —— 避免重复
+1. **搜 [已有 issues](https://github.com/jinws1993/CloudGameHub/issues)** —— 避免重复
 2. **用 issue 模板** —— GitHub 会自动给选择器
 4. **附上关键信息**：
    - 操作系统（fnOS / Debian / Ubuntu / 其他）
    - Docker 版本（`docker --version`）
-   - 日志（`docker logs nasgame --tail=200`）
+   - 日志（`docker logs cloudgamehub --tail=200`）
    - 复现步骤
 
 ### 提 Pull Request
@@ -24,8 +24,8 @@
 
 ```bash
 # 1. Fork + clone
-git clone https://github.com/<你的用户名>/NasGameHub.git
-cd NasGameHub
+git clone https://github.com/<你的用户名>/CloudGameHub.git
+cd CloudGameHub
 
 # 2. 创建分支 (语义化命名)
 git checkout -b feature/my-awesome-feature     # 新功能
@@ -120,10 +120,10 @@ PR 步骤：
 
 ### Reporting Bugs
 
-Search [existing issues](https://github.com/jinws1993/NasGameHub/issues) first, then use the issue template. Include:
+Search [existing issues](https://github.com/jinws1993/CloudGameHub/issues) first, then use the issue template. Include:
 - OS (fnOS / Debian / Ubuntu)
 - Docker version (`docker --version`)
-- Logs (`docker logs nasgame --tail=200`)
+- Logs (`docker logs cloudgamehub --tail=200`)
 - Reproduction steps
 
 ### Submitting PRs

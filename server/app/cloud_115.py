@@ -5,7 +5,7 @@
   * get_info(pickcode)  - 取文件/目录的元数据
   * get_download_url(pickcode) - 取下载 URL (CDN 直链)
 
-Cookie 格式: 用户从浏览器复制 "UID=...; CID=...; SEID=..." 后, 填进 NASGame 设置。
+Cookie 格式: 用户从浏览器复制 "UID=...; CID=...; SEID=..." 后, 填进 CloudGameHub 设置。
 
 不存储密码/账号, 仅用 cookie。Cookie 有效期通常 1 周左右, 失效用户重填。
 """

@@ -10,9 +10,9 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
 fi
 
 # 用 url-embedded credential (仅本次 push 临时)
-git push "https://x-access-token:${GH_TOKEN}@github.com/jinws1993/NasGameHub.git" main 2>&1
+git push "https://x-access-token:${GH_TOKEN}@github.com/jinws1993/CloudGameHub.git" main 2>&1
 
 echo ""
 echo "✅ Push 完成."
 echo "   GitHub Actions 会在 ~5 分钟内构建 APK 并上传到 v1.2.0 release."
-echo "   监控: https://github.com/jinws1993/NasGameHub/actions"
+echo "   监控: https://github.com/jinws1993/CloudGameHub/actions"

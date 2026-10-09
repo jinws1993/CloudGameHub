@@ -39,8 +39,8 @@ class ScreenScraperClient:
         self.password = password
         # devid/devpassword 是 ScreenScraper 的开发者凭据 (需注册开发者账号获得)
         # 默认使用公开的 dev 账号 (会限流, 仅供测试)
-        self.devid = devid or "nasgame"
-        self.devpassword = devpassword or "nasgame123"
+        self.devid = devid or "cloudgamehub"
+        self.devpassword = devpassword or "cloudgamehub123"
         self._client: httpx.AsyncClient | None = None
         self.last_error: str = ""  # 上一次错误信息
         self.last_status: int = 0  # 上一次 HTTP 状态
@@ -52,7 +52,7 @@ class ScreenScraperClient:
             proxies = {"http://": settings.proxy_url, "https://": settings.proxy_url}
         self._client = httpx.AsyncClient(
             timeout=60.0,
-            headers={"User-Agent": "NASGame/1.0"},
+            headers={"User-Agent": "CloudGameHub/1.0"},
             proxies=proxies,
         )
         return self
@@ -80,7 +80,7 @@ class ScreenScraperClient:
         params = {
             "devid": self.devid,
             "devpassword": self.devpassword,
-            "softname": "nasgame",
+            "softname": "cloudgamehub",
             "output": "json",
             "ssid": self.user,
             "sspassword": self.password,

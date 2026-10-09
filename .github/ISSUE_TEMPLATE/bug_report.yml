@@ -8,13 +8,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢你帮 NasGameHub 改进。请填写以下信息。
+        感谢你帮 CloudGameHub 改进。请填写以下信息。
 
   - type: dropdown
     id: os
     attributes:
       label: 操作系统 / OS
-      description: 部署 NasGameHub 的系统
+      description: 部署 CloudGameHub 的系统
       options:
         - 飞牛 OS (fnOS)
         - Debian 12
@@ -37,10 +37,10 @@ body:
       required: true
 
   - type: input
-    id: nasgame-version
+    id: cloudgamehub-version
     attributes:
-      label: NasGameHub 版本 / Version
-      placeholder: 'docker inspect nasgame | grep org.opencontainers.image.version'
+      label: CloudGameHub 版本 / Version
+      placeholder: 'docker inspect cloudgamehub | grep org.opencontainers.image.version'
     validations:
       required: false
 
@@ -76,7 +76,7 @@ body:
       label: 关键日志 / Relevant logs
       placeholder: |
         ```
-        docker logs nasgame --tail=200
+        docker logs cloudgamehub --tail=200
         ```
         浏览器开发者工具 → Console 错误信息
     validations:

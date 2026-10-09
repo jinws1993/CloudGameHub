@@ -9,11 +9,11 @@
 ### 🔒 必须做的
 
 1. **首次部署立即改默认密码**：`admin / admin123` 是公开默认，必须改。
-2. **不要把 NasGameHub 直接暴露公网**：Web UI 默认监听 `0.0.0.0:14322`。如果必须公网访问：
+2. **不要把 CloudGameHub 直接暴露公网**：Web UI 默认监听 `0.0.0.0:14322`。如果必须公网访问：
    - 用 **Nginx + Let's Encrypt + Basic Auth** 双层认证
    - 或 **Cloudflare Tunnel**（免费，无需开防火墙端口）
 3. **保管好 `data/config/config.json`**：里面以明文存储 AI key / SS 凭据 / 115 cookie。**不要 commit 到 Git**。已在 `.gitignore`。
-4. **JWT Token 泄漏检测**：浏览器开发者工具 → Application → Local Storage → `nasgame_token`。泄漏立即**改密码**。
+4. **JWT Token 泄漏检测**：浏览器开发者工具 → Application → Local Storage → `cloudgamehub_token`。泄漏立即**改密码**。
 
 ### ⚠️ 已知风险
 
@@ -46,15 +46,15 @@ chmod -R 700 data/media/
 
 ```bash
 # 看最近登录
-docker compose exec nasgame python -c "
+docker compose exec cloudgamehub python -c "
 import sqlite3
-con = sqlite3.connect('/data/db/nasgame.db')
+con = sqlite3.connect('/data/db/cloudgamehub.db')
 for row in con.execute('SELECT id, username, created_at FROM users'):
     print(row)
 "
 
 # 看错误日志
-docker compose logs --tail=200 nasgame | grep -i 'error\|warning'
+docker compose logs --tail=200 cloudgamehub | grep -i 'error\|warning'
 ```
 
 ---
@@ -64,9 +64,9 @@ docker compose logs --tail=200 nasgame | grep -i 'error\|warning'
 ### 🔒 Must-do
 
 1. **Change the default password** (`admin / admin123`) on first deploy.
-2. **Don't expose NasGameHub directly to the public internet.** If you must, use Nginx + Let's Encrypt + Basic Auth, or Cloudflare Tunnel.
+2. **Don't expose CloudGameHub directly to the public internet.** If you must, use Nginx + Let's Encrypt + Basic Auth, or Cloudflare Tunnel.
 3. **Protect `data/config/config.json`** — it stores AI keys / SS credentials / 115 cookies in plaintext. Gitignored, but don't back it up to cloud storage.
-4. **Monitor the JWT token** — `localStorage.nasgame_token`. If leaked, change password immediately.
+4. **Monitor the JWT token** — `localStorage.cloudgamehub_token`. If leaked, change password immediately.
 
 ### ⚠️ Known risks
 

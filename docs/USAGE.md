@@ -22,7 +22,7 @@
 ```bash
 # 通过 SCP / SFTP / SMB / FileBrowser 等上传到 NAS
 # 例如:
-scp -r "~/Downloads/roms/fc/"  admin@NAS_IP:/vol2/1000/docker/NASGame/data/roms/fc/
+scp -r "~/Downloads/roms/fc/"  admin@NAS_IP:/vol2/1000/docker/CloudGameHub/data/roms/fc/
 ```
 
 #### 方式 B：115 云盘导入（无需下载到 NAS）
@@ -95,7 +95,7 @@ AI / SS 都找不到封面时：
 
 `client-android/` 目录下是 Android Studio 项目，编译出 APK 后安装：
 
-- 设置里填 NasGameHub 服务器地址（`http://NAS_IP:14322`）
+- 设置里填 CloudGameHub 服务器地址（`http://NAS_IP:14322`）
 - 登录账号
 - 主界面显示库列表 + 远程启动按钮
 
@@ -108,7 +108,7 @@ cd client-windows
 pip install -r requirements.txt
 python main.py   # 开发模式
 # 打包:
-pyinstaller --name=NasGameHub --windowed --onefile main.py
+pyinstaller --name=CloudGameHub --windowed --onefile main.py
 ```
 
 ### 8. 远程游玩
@@ -126,23 +126,23 @@ pyinstaller --name=NasGameHub --windowed --onefile main.py
 
 ### 9. 数据备份
 
-定期备份 `data/db/nasgame.db`（SQLite）+ `data/media/`（封面/截图）：
+定期备份 `data/db/cloudgamehub.db`（SQLite）+ `data/media/`（封面/截图）：
 
 ```bash
 # 停容器
-docker compose stop nasgame
+docker compose stop cloudgamehub
 
 # 备份
 tar -czf backup-$(date +%F).tar.gz data/db data/media data/config
 
 # 启动
-docker compose start nasgame
+docker compose start cloudgamehub
 ```
 
 或用 SQLite 在线备份（不需停服务）：
 
 ```bash
-sqlite3 data/db/nasgame.db ".backup '/path/to/backup.db'"
+sqlite3 data/db/cloudgamehub.db ".backup '/path/to/backup.db'"
 ```
 
 ### 10. 用户管理
@@ -193,9 +193,9 @@ Enable in **Settings → 115 cloud disk** via QR-code login. Then browse and imp
 ### 9. Backup
 
 ```bash
-docker compose stop nasgame
+docker compose stop cloudgamehub
 tar -czf backup-$(date +%F).tar.gz data/db data/media data/config
-docker compose start nasgame
+docker compose start cloudgamehub
 ```
 
 ### 10. User roles

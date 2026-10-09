@@ -17,7 +17,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/nasgamehub
+  IMAGE_NAME: ${{ github.repository_owner }}/cloudgamehub
 
 jobs:
   build:

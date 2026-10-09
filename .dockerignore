@@ -1,5 +1,5 @@
 # ============================================================
-# NasGameHub .dockerignore
+# CloudGameHub .dockerignore
 # ============================================================
 # Files NOT copied into the Docker image during build.
 

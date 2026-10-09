@@ -1,5 +1,5 @@
 # ============================================================
-# NasGameHub .gitignore
+# CloudGameHub .gitignore
 # ============================================================
 # This file tells Git what NOT to commit.
 # The .gitkeep files inside data/ subfolders keep those folders tracked.
@@ -42,8 +42,8 @@ data/db/*.db
 data/db/*.db-journal
 data/db/*.db-shm
 data/db/*.db-wal
-data/nasgame.db
-data/nasgame.pid
+data/cloudgamehub.db
+data/cloudgamehub.pid
 
 # ----- Runtime config (contains AI keys / SS creds / 115 cookie) -----
 data/config/config.json

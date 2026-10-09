@@ -23,15 +23,15 @@ COPY server/requirements.txt /app/requirements.txt
 COPY venv.tar* /tmp/venv.tar
 
 RUN if [ -f /tmp/venv.tar ]; then \
-      mkdir -p /opt/nasgame-venv \
-      && tar -xf /tmp/venv.tar -C /opt/nasgame-venv \
+      mkdir -p /opt/cloudgamehub-venv \
+      && tar -xf /tmp/venv.tar -C /opt/cloudgamehub-venv \
       && rm /tmp/venv.tar; \
     else \
       python -m pip install --no-cache-dir -r /app/requirements.txt; \
     fi
 
-ENV PATH="/opt/nasgame-venv/bin:$PATH" \
-    PYTHONPATH="/opt/nasgame-venv/lib/python3.11/site-packages"
+ENV PATH="/opt/cloudgamehub-venv/bin:$PATH" \
+    PYTHONPATH="/opt/cloudgamehub-venv/lib/python3.11/site-packages"
 
 # --- Copy application code ---
 COPY server/app /app/app

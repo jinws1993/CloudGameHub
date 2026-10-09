@@ -60,7 +60,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NASGame"
+        android:theme="@style/Theme.CloudGameHub"
         android:usesCleartextTraffic="true">
 
         <activity
@@ -68,7 +68,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.NASGame"
+            android:theme="@style/Theme.CloudGameHub"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

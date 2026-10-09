@@ -1,4 +1,4 @@
-"""NASGame - Main FastAPI application."""
+"""CloudGameHub - Main FastAPI application."""
 from __future__ import annotations
 import asyncio
 import json
@@ -57,13 +57,13 @@ async def lifespan(app: FastAPI):
             await db.commit()
             logger.info(f"Created default admin user: {settings.admin_username}")
 
-    logger.info(f"NASGame started on http://{settings.host}:{settings.port}")
+    logger.info(f"CloudGameHub started on http://{settings.host}:{settings.port}")
     yield
     await stream_mgr.cleanup_all()
 
 
 app = FastAPI(
-    title="NASGame",
+    title="CloudGameHub",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
@@ -102,7 +102,7 @@ async def index():
     idx = WEB_DIR / "index.html"
     if idx.exists():
         return HTMLResponse(idx.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>NASGame</h1><p>Web UI not yet installed.</p>")
+    return HTMLResponse("<h1>CloudGameHub</h1><p>Web UI not yet installed.</p>")
 
 
 @app.get("/favicon.ico")

@@ -12,9 +12,9 @@
 
 | 工作 | 文件 | 状态 |
 |---|---|---|
-| **GitHub 仓库描述** 改为突出 115 网盘集成 | https://github.com/jinws1993/NasGameHub | ✅ |
+| **GitHub 仓库描述** 改为突出 115 网盘集成 | https://github.com/jinws1993/CloudGameHub | ✅ |
 | **17 个 GitHub Topics** | `nas / retro-gaming / game-library / docker / fastapi / vue3 / ai / screenscraper / emulator / rom / rom-manager / self-hosted / gamecube / gba / ps1 / moonlight / streaming` | ✅ |
-| **Release r11.0.0 发布** | https://github.com/jinws1993/NasGameHub/releases/tag/r11.0.0 | ✅ |
+| **Release r11.0.0 发布** | https://github.com/jinws1993/CloudGameHub/releases/tag/r11.0.0 | ✅ |
 | **README 重写** 突出 115 + 手机下载到本地流程 | `README.md` | ✅ |
 | **Social preview banner** (1280×640) | `docs/images/social-preview.png` | ✅ |
 | **登录页截图** | `docs/images/login-screenshot.png` | ✅ |
@@ -31,8 +31,8 @@
 
 | 工作 | 原因 | 怎么做 |
 |---|---|---|
-| **GitHub Social Preview 图上传到 Settings** | GitHub API 不开放，需网页操作 | https://github.com/jinws1993/NasGameHub/settings → Social preview → 上传 `docs/images/social-preview.png` |
-| **awesome-selfhosted PR 提交** | AI 不允许替用户提 PR (官方明确禁止) | https://github.com/awesome-selfhosted/awesome-selfhosted-data/new/master/software → 文件名 `nasgamehub.yml` → 粘贴 `docs/submissions/awesome-selfhosted.yml` 内容 |
+| **GitHub Social Preview 图上传到 Settings** | GitHub API 不开放，需网页操作 | https://github.com/jinws1993/CloudGameHub/settings → Social preview → 上传 `docs/images/social-preview.png` |
+| **awesome-selfhosted PR 提交** | AI 不允许替用户提 PR (官方明确禁止) | https://github.com/awesome-selfhosted/awesome-selfhosted-data/new/master/software → 文件名 `cloudgamehub.yml` → 粘贴 `docs/submissions/awesome-selfhosted.yml` 内容 |
 | **V2EX 发帖** | 需要你的账号登录 | 用 `PROMOTION.md` 里"短版"模板 |
 | **什么值得买 / 恩山 / 酷安 发帖** | 同上 | 用"短版"或"长版"模板 |
 | **Reddit r/selfhosted / r/emulation 发帖** | 同上 | 用"Short English"模板 |
@@ -53,8 +53,8 @@
 ### 🔍 提交 PR 给我做后的样子
 
 每个 PR **标题**建议：
-- "Add NasGameHub to awesome-selfhosted" (官方模板)
-- "Add NasGameHub to Games - Administrative Utilities section"
+- "Add CloudGameHub to awesome-selfhosted" (官方模板)
+- "Add CloudGameHub to Games - Administrative Utilities section"
 
 每个 PR **正文**建议：
 - 描述：2-3 行核心特性
@@ -87,7 +87,7 @@
 
 #### Upload Social Preview (5 min)
 
-1. Open https://github.com/jinws1993/NasGameHub/settings
+1. Open https://github.com/jinws1993/CloudGameHub/settings
 2. Scroll to **Social preview**
 3. Click **Upload an image**
 4. Use `docs/images/social-preview.png` (1280×640, 67 KB, already in repo)
@@ -96,16 +96,16 @@
 #### Submit to awesome-selfhosted (2027-01-30+)
 
 1. Open https://github.com/awesome-selfhosted/awesome-selfhosted-data/new/master/software
-2. File name: `nasgamehub.yml`
+2. File name: `cloudgamehub.yml`
 3. Paste `docs/submissions/awesome-selfhosted.yml` content
-4. Commit message: `Add NasGameHub`
+4. Commit message: `Add CloudGameHub`
 5. Click **Propose new file** → PR
 6. **Important**: PR body must check `The submission was done by a human, not a machine/LLM` — you check this yourself
 
 #### Post on Reddit / HN
 
 - Use the templates in `PROMOTION.md`
-- **HN**: use `Show HN: NasGameHub – A Netflix-style retro game library for your NAS`
+- **HN**: use `Show HN: CloudGameHub – A Netflix-style retro game library for your NAS`
 - **Reddit r/selfhosted**: post as `Project` link post
 - **Reddit r/emulation**: post as text with explanation
 

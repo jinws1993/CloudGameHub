@@ -7,11 +7,11 @@
 ## 🇨🇳 中文版
 
 ### 标题
-**NasGameHub — 让游戏管理像电影一样简单**
+**CloudGameHub — 让游戏管理像电影一样简单**
 
 ### 短版（V2EX / 酷安 / 贴吧）
 
-> 分享一下我自用的 NAS 复古游戏库管理器：**NasGameHub**
+> 分享一下我自用的 NAS 复古游戏库管理器：**CloudGameHub**
 >
 > 装好之后把 ROM 丢进去，自动归类 25 个平台，自动刮削封面/中文译名/简介。AI + ScreenScraper 双引擎，AI 优先识别不规则文件名（包括中文、日文）。
 >
@@ -19,17 +19,17 @@
 >
 > Docker 一键部署，飞牛 OS / Debian / Ubuntu 都跑。我自己用了一段时间，关掉游戏。
 >
-> 🔗 https://github.com/jinws1993/NasGameHub
+> 🔗 https://github.com/jinws1993/CloudGameHub
 >
 > Star 一下 + 提 issue / PR 都欢迎，目前还在积极开发。
 
 ### 长版（少数派 / 什么值得买）
 
-> # NasGameHub：把散落的 ROM 整理成一个漂亮的游戏库
+> # CloudGameHub：把散落的 ROM 整理成一个漂亮的游戏库
 >
 > 作为一个 NAS 玩家，最大的痛点就是——硬盘上堆了几百个 ROM 文件，命名乱七八糟，想玩的时候找不到。
 >
-> **NasGameHub** 是我写给自己用了一段时间后开源出来的，目标是让游戏管理变得像 Netflix 一样简单。
+> **CloudGameHub** 是我写给自己用了一段时间后开源出来的，目标是让游戏管理变得像 Netflix 一样简单。
 >
 > ## 它能做什么
 >
@@ -44,8 +44,8 @@
 > ## 装起来有多简单
 >
 > ```bash
-> git clone https://github.com/jinws1993/NasGameHub.git
-> cd NasGameHub
+> git clone https://github.com/jinws1993/CloudGameHub.git
+> cd CloudGameHub
 > cp .env.example .env   # 改 AI key / 管理员密码
 > docker compose up -d
 > ```
@@ -58,9 +58,9 @@
 >
 > ## 我也在不断完善
 >
-> - 仓库：[jinws1993/NasGameHub](https://github.com/jinws1993/NasGameHub)
+> - 仓库：[jinws1993/CloudGameHub](https://github.com/jinws1993/CloudGameHub)
 > - 文档：仓库 docs/ 目录，中英双语
-> - Issue / PR 都很欢迎！看 [CONTRIBUTING.md](https://github.com/jinws1993/NasGameHub/blob/main/CONTRIBUTING.md) 了解如何贡献。
+> - Issue / PR 都很欢迎！看 [CONTRIBUTING.md](https://github.com/jinws1993/CloudGameHub/blob/main/CONTRIBUTING.md) 了解如何贡献。
 
 ---
 
@@ -68,7 +68,7 @@
 
 ### Short (Reddit r/selfhosted / r/emulation)
 
-> **NasGameHub — Netflix for your retro game library**
+> **CloudGameHub — Netflix for your retro game library**
 >
 > After getting tired of my messy ROM folders, I open-sourced the NAS game library manager I've been using:
 >
@@ -82,15 +82,15 @@
 >
 > Stack: FastAPI + SQLAlchemy + SQLite + Vue 3 SPA (single-file, no build). One-line Docker deploy, offline venv support for air-gapped NAS.
 >
-> 🔗 https://github.com/jinws1993/NasGameHub
+> 🔗 https://github.com/jinws1993/CloudGameHub
 >
 > Star ⭐ and contributions welcome!
 
 ### Long (Hacker News / Show HN)
 
-> **Show HN: NasGameHub – A Netflix-style retro game library for your NAS**
+> **Show HN: CloudGameHub – A Netflix-style retro game library for your NAS**
 >
-> I built this because I had hundreds of ROM files scattered across my NAS with terrible filenames. Now I drop them in a folder and NasGameHub gives me a beautiful, browsable, scrapable game collection.
+> I built this because I had hundreds of ROM files scattered across my NAS with terrible filenames. Now I drop them in a folder and CloudGameHub gives me a beautiful, browsable, scrapable game collection.
 >
 > **What makes it different**
 >
@@ -104,7 +104,7 @@
 >
 > **Stack**: FastAPI + SQLAlchemy + SQLite + Vue 3 + httpx + loguru. ~580KB total source.
 >
-> 🔗 https://github.com/jinws1993/NasGameHub
+> 🔗 https://github.com/jinws1993/CloudGameHub
 >
 > Looking for contributors, especially for the 14 missing platforms (Atari 2600/5200/7800, Lynx, 32X, Sega CD, Saturn, Neo Geo Pocket, WonderSwan, Virtual Boy, MSX, etc.)
 

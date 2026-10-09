@@ -458,6 +458,13 @@ private fun DetailRow(label: String, value: String) {
     }
 }
 
+private data class RomStatus(
+    val text: String,
+    val sub: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: Color,
+)
+
 @Composable
 private fun RomStatusRow(
     game: Game,
@@ -466,34 +473,39 @@ private fun RomStatusRow(
     onCancel: () -> Unit,
 ) {
     val realFile = game.localFile()
-    val (text, sub, icon, color) = when {
-        game.isLocal && realFile == null ->
-            "本地记录还在, 但文件被删了" to "点播放会自动重新下载" to
-                Icons.Default.Warning to Color(0xFFFF9800)
-        game.isLocal ->
-            "已下载到本机 · 点上面直接开玩" to "${humanSize(game.localSize)} · $emulator" to
-                Icons.Default.CheckCircle to MaterialTheme.colorScheme.primary
-        else ->
-            "在 115 上 · 点了才下载到手机" to
-                "预计 ${humanSize(game.romSize)}" +
-                    (emulator?.let { " · 用 $it" } ?: " · 没找到模拟器") +
-                    (if (EmulatorLauncher.isRetroArch(emulator)) " (核心 ${core ?: "待装"})" else "") to
-                Icons.Default.CloudDownload to Color(0xFF2196F3)
+    val st = when {
+        game.isLocal && realFile == null -> RomStatus(
+            "本地记录还在, 但文件被删了",
+            "点播放会自动重新下载",
+            Icons.Default.Warning, Color(0xFFFF9800),
+        )
+        game.isLocal -> RomStatus(
+            "已下载到本机 · 点上面直接开玩",
+            "${humanSize(game.localSize)} · ${emulator ?: "未找到模拟器"}",
+            Icons.Default.CheckCircle, MaterialTheme.colorScheme.primary,
+        )
+        else -> RomStatus(
+            "在 115 上 · 点了才下载到手机",
+            "预计 ${humanSize(game.romSize)}" +
+                (emulator?.let { " · 用 $it" } ?: " · 没找到模拟器") +
+                (if (EmulatorLauncher.isRetroArch(emulator)) " (核心 ${core ?: "待装"})" else ""),
+            Icons.Default.CloudDownload, Color(0xFF2196F3),
+        )
     }
 
     Surface(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        color = color.copy(alpha = 0.12f),
+        color = st.color.copy(alpha = 0.12f),
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = color)
+            Icon(st.icon, null, tint = st.color)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(text, fontSize = 13.sp, color = color, fontWeight = FontWeight.Medium)
-                if (sub.isNotBlank()) {
+                Text(st.text, fontSize = 13.sp, color = st.color, fontWeight = FontWeight.Medium)
+                if (st.sub.isNotBlank()) {
                     Text(
-                        sub, fontSize = 11.sp,
+                        st.sub, fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                 }

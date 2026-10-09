@@ -11,13 +11,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.cloudgamehub.data.pan115.Pan115Client
-import com.cloudgamehub.data.prefs.PrefsStore
 import com.cloudgamehub.ui.CloudGameHubApp
 import com.cloudgamehub.ui.RootViewModel
 import com.cloudgamehub.ui.theme.CloudGameHubTheme
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 
 /**
  * 单 App 入口。
@@ -28,15 +25,12 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var prefs: PrefsStore
-    @Inject lateinit var pan: Pan115Client
-
     private val rootViewModel: RootViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pan.restore()          // 把保存的 115 cookie 灌进内存 jar
+        // cookie 载入和登录态检查都在 RootViewModel.bootstrap() 里做 (需要协程)
         rootViewModel.bootstrap()
 
         setContent {

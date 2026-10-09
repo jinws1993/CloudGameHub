@@ -81,6 +81,18 @@ class Pan115Client @Inject constructor(
 
         /** 下载 CDN 时用的 UA, 跟 webapi 的故意不一样 */
         const val CDN_UA = "CloudGameHub/1.3.0 (Android)"
+
+        // ================= 工具 =================
+
+        /** 取小写扩展名, 不含点 ("mario.nes" → "nes"), 没点则空串 */
+        fun extOf(filename: String): String {
+            val dot = filename.lastIndexOf('.')
+            return if (dot >= 0) filename.substring(dot + 1).lowercase() else ""
+        }
+
+        /** 去掉扩展名后的文件名 */
+        fun stemOf(filename: String): String =
+            if (filename.contains('.')) filename.substringBeforeLast('.') else filename
     }
 
     /** 内存 cookie jar: 只在进程存活期间需要, 不落盘 (cookie 本身存在 DataStore) */
@@ -107,7 +119,7 @@ class Pan115Client @Inject constructor(
     // ================= cookie 管理 =================
 
     /** 载入保存的 cookie (App 启动时调) */
-    fun restore() {
+    suspend fun restore() {
         val raw = prefs.cached115Cookie() ?: return
         applyCookieString(raw)
     }
@@ -288,17 +300,6 @@ class Pan115Client @Inject constructor(
         o.optString("file_name") to (o.optString("file_size").toLongOrNull() ?: 0L)
     }
 
-    // ================= 工具 =================
-
-    companion object {
-        fun extOf(filename: String): String {
-            val dot = filename.lastIndexOf('.')
-            return if (dot >= 0) filename.substring(dot + 1).lowercase() else ""
-        }
-
-        fun stemOf(filename: String): String =
-            if (filename.contains('.')) filename.substringBeforeLast('.') else filename
-    }
 }
 
 /**

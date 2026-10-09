@@ -273,6 +273,7 @@ class DownloadManager @Inject constructor(
                 }
                 // 成功: .part 改名成正式文件
                 commit(target, partName)
+                target.currentLength()
             }
         }
 

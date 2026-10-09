@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -293,9 +295,9 @@ fun ConnectScreen(
                 minLines = 2,
                 maxLines = 4,
                 visualTransformation = if (showCookie) {
-                    androidx.compose.ui.text.input.VisualTransformation.None
+                    VisualTransformation.None
                 } else {
-                    androidx.compose.ui.text.input.VisualTransformation.PasswordVisualTransformation()
+                    PasswordVisualTransformation()
                 },
                 trailingIcon = {
                     IconButton(onClick = { showCookie = !showCookie }) {

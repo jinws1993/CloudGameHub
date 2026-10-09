@@ -190,10 +190,13 @@ class LibraryRepo @Inject constructor(
         var done = 0
         var batch = db.pendingGames(limit = 30)
         while (batch.isNotEmpty()) {
-            scraper.scrapeBatch(batch) {
-                done++
-                onProgress(done, total)
-            }
+            scraper.scrapeBatch(
+                batch = batch,
+                onEach = {
+                    done++
+                    onProgress(done, total)
+                },
+            )
             // 继续取下一批 (刚刮完的已经不算 pending 了)
             if (db.countPendingScrape() <= 0) break
             val next = db.pendingGames(limit = 30)

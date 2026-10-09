@@ -288,8 +288,11 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** SettingsViewModel 需要一个 Context 拿 contentResolver, 由 Screen 注入 */
-    var prefsAppCtx: android.content.Context? = null
+    /**
+     * SettingsViewModel 需要 Context 拿 contentResolver (SAF 授权要), 由 Screen 注入。
+     * 用 lateinit 而不是可空 —— 可空的话每个调用点都得写 !!, 反而更容易漏。
+     */
+    lateinit var prefsAppCtx: android.content.Context
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -623,11 +626,12 @@ private fun CoreRow(
     Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(code, Modifier.width(52.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Column(
-                Modifier
-                    .weight(1f)
-                    .let { if (recommended.isNotEmpty()) it.clickable { expanded = !expanded } else it }
-            ) {
+            val nameModifier = if (recommended.isNotEmpty()) {
+                Modifier.weight(1f).clickable { expanded = !expanded }
+            } else {
+                Modifier.weight(1f)
+            }
+            Column(nameModifier) {
                 Text(name, fontSize = 11.sp)
                 Text(
                     status, fontSize = 10.sp,

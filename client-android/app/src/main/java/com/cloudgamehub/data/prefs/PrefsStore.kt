@@ -157,7 +157,7 @@ class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Contex
 
     /** 设置页展示用 */
     suspend fun romStorageDisplay(): String = when (romStorageKind()) {
-        RomStorageKind.DEFAULT -> "App 私有目录 ($defaultRomStoragePath())\n注意: RetroArch 读不到, 需要换个公共目录"
+        RomStorageKind.DEFAULT -> "App 私有目录 (${defaultRomStoragePath()})\n注意: RetroArch 读不到, 需要换个公共目录"
         RomStorageKind.SAF -> romStorageSafUri()?.let { humanizeSafUri(it) } ?: "未选择"
         RomStorageKind.LEGACY_PATH -> romStorageLegacyPath() ?: "未设置"
     }

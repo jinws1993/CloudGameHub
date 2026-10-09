@@ -243,7 +243,7 @@ fun FolderPickScreen(
 }
 
 @Composable
-private fun LazyRowCrumbs(crumbs: List<Pair<String, String>>, onClick: (Int) -> Unit) {
+private fun RowScope.LazyRowCrumbs(crumbs: List<Pair<String, String>>, onClick: (Int) -> Unit) {
     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
         crumbs.forEachIndexed { i, (cid, name) ->
             if (i > 0) {

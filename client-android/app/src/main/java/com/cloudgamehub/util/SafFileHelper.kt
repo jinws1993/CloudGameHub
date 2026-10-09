@@ -78,17 +78,19 @@ object SafFileHelper {
      *
      * @return 真实路径; 推不出来 (SD 卡 / 特殊 provider) 返回 null
      */
-    fun treeUriToPath(treeUri: Uri): String? = try {
-        val docId = DocumentsContract.getTreeDocumentId(treeUri) ?: return null
-        val colon = docId.indexOf(':')
-        if (colon <= 0) return null
-        val volume = docId.substring(0, colon)
-        val rest = docId.substring(colon + 1)
-        val root = if (volume.equals("primary", true)) "/storage/emulated/0" else "/storage/$volume"
-        val path = if (rest.isBlank()) root else "$root/$rest"
-        File(path).takeIf { it.exists() }?.absolutePath
-    } catch (_: Exception) {
-        null
+    fun treeUriToPath(treeUri: Uri): String? {
+        return try {
+            val docId = DocumentsContract.getTreeDocumentId(treeUri) ?: return null
+            val colon = docId.indexOf(':')
+            if (colon <= 0) return null
+            val volume = docId.substring(0, colon)
+            val rest = docId.substring(colon + 1)
+            val root = if (volume.equals("primary", true)) "/storage/emulated/0" else "/storage/$volume"
+            val path = if (rest.isBlank()) root else "$root/$rest"
+            File(path).takeIf { it.exists() }?.absolutePath
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** SAF 目录里某个文件的真实路径; 拿不到返回 null */

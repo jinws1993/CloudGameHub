@@ -30,6 +30,7 @@ class ScanViewModel @Inject constructor(
     private val prefs: PrefsStore,
 ) : ViewModel() {
     val state = repo.scan
+    // 校验类错误走 localError, 扫描过程状态走 repo.scan
 
     private val _counts = MutableStateFlow(Triple(0, 0, 0))
     val counts = _counts.asStateFlow()
@@ -40,12 +41,20 @@ class ScanViewModel @Inject constructor(
         }
     }
 
+    /** 没选目录之类的前置校验失败, 走这里 (repo.scan 是只读 StateFlow, 不能直接赋值) */
+    fun reportError(msg: String) {
+        _localError.value = msg
+    }
+
+    private val _localError = MutableStateFlow<String?>(null)
+    val localError = _localError.asStateFlow()
+
     fun start() {
         viewModelScope.launch {
             val cid = prefs.romRootCid()
             val path = prefs.romRootPath() ?: "根目录"
             if (cid.isNullOrBlank()) {
-                repo.scan.value = ScanState(done = true, error = "还没选目录")
+                vm.reportError("还没选 ROM 目录, 先去选一个")
                 return@launch
             }
             val auto = prefs.autoScrapeAfterScan()
@@ -66,6 +75,7 @@ fun ScanScreen(
 ) {
     val state by vm.state.collectAsState()
     val counts by vm.counts.collectAsState()
+    val localError by vm.localError.collectAsState()
 
     LaunchedEffect(Unit) { vm.refresh() }
 
@@ -136,7 +146,7 @@ fun ScanScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(state.message, fontSize = 12.sp)
             }
-            state.error?.let {
+            (state.error ?: localError)?.let {
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,

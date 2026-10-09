@@ -3,6 +3,7 @@ package com.cloudgamehub.data.play
 import android.content.Context
 import com.cloudgamehub.data.db.CloudDb
 import com.cloudgamehub.data.download.DownloadManager
+import com.cloudgamehub.data.download.DownloadProgress
 import com.cloudgamehub.data.model.Game
 import com.cloudgamehub.data.prefs.PrefsStore
 import com.cloudgamehub.emulator.EmulatorLauncher
@@ -74,7 +75,7 @@ class PlayCoordinator @Inject constructor(
             return Result.Error("这个游戏没有 115 文件信息, 重新扫描一次试试")
         }
         if (game.romSize > 20L * 1024 * 1024 * 1024) {
-            return Result.Error("这个 ROM 有 ${DownloadManager.human(game.romSize)}, 手机可能放不下")
+            return Result.Error("这个 ROM 有 ${DownloadProgress.human(game.romSize)}, 手机可能放不下")
         }
         // 下的事交给 DownloadManager, 它自己管队列和续传
         if (!downloadMgr.start(game)) return Result.AlreadyDownloading

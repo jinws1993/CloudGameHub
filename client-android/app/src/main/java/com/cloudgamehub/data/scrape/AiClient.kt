@@ -137,7 +137,7 @@ class AiClient @Inject constructor() {
      */
     private fun parseAiJson(raw: String): Game? {
         if (raw.isBlank()) return null
-        var content = raw.replace(Regex("<think>.*?</think>", RegexOption.DOTALL), "").trim()
+        var content = raw.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
         if (content.isBlank()) {
             Log.w(TAG, "AI 只返回了 <think> 块")
             return null
@@ -168,9 +168,9 @@ class AiClient @Inject constructor() {
             if (end > 0) return text.substring(0, end + 1)
         }
         // 再试 markdown 围栏
-        Regex("```(?:json)?\\s*(\\{.*?\\})\\s*```", RegexOption.DOTALL).find(text)?.let {
-            return it.groupValues[1]
-        }
+        val fenced = Regex("```(?:json)?\\s*(\\{.*?\\})\\s*```", RegexOption.DOT_MATCHES_ALL)
+            .find(text)
+        if (fenced != null) return fenced.groupValues[1]
         // 最后找第一个 { 到配对的 }
         val start = text.indexOf('{')
         if (start < 0) return null
@@ -277,7 +277,7 @@ class LibretroThumbnails @Inject constructor() {
                 client.newCall(req).execute().use { resp ->
                     if (resp.code != 200) return@use false
                     val body = resp.body ?: return@use false
-                    val ct = body.contentType()?.type().orEmpty()
+                    val ct = body.contentType()?.type.orEmpty()
                     if (ct != "image") return@use false
                     val bytes = body.bytes()
                     if (bytes.size < 1024) return@use false    // 多半是占位图

@@ -293,4 +293,3 @@ class LibretroThumbnails @Inject constructor() {
         null
     }
 }
-}

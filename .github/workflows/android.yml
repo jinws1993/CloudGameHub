@@ -106,6 +106,17 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  brace-check:
+    name: Brace / Structure Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Kotlin brace balance
+        # 花括号不平衡是最容易犯又最难肉眼发现的错, 而且会直接卡住整个构建。
+        # 简单 count('{') 会被字符串模板和 raw string 骗到, 所以用这个状态机版本。
+        run: python3 client-android/tools/check_braces.py client-android/app/src/main/java
+
   lint:
     name: Android Lint
     runs-on: ubuntu-latest

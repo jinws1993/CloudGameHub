@@ -307,7 +307,7 @@ fun SettingsScreen(
 
     val toast by vm.toast.collectAsState()
     val cookieSet by vm.cookieSet.collectAsState()
-    val rootPath by vm.rootPath.collectAsState()
+    val rootPath by vm.rootPath.collectAsState()   // MutableStateFlow 也要 collect
     val aiOn by vm.aiOn.collectAsState()
     val aiBase by vm.aiBase.collectAsState()
     val aiKey by vm.aiKey.collectAsState()

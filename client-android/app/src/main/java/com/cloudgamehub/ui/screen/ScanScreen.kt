@@ -54,7 +54,7 @@ class ScanViewModel @Inject constructor(
             val cid = prefs.romRootCid()
             val path = prefs.romRootPath() ?: "根目录"
             if (cid.isNullOrBlank()) {
-                vm.reportError("还没选 ROM 目录, 先去选一个")
+                _localError.value = "还没选 ROM 目录, 先去选一个"
                 return@launch
             }
             val auto = prefs.autoScrapeAfterScan()

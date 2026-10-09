@@ -105,31 +105,42 @@ object PlatformDetector {
 
     private val FOLDER_HINTS: Map<String, String> = buildMap {
         // 目录名 (小写) → 平台
+        //
+        // ⚠️ 一个逗号只能带一个 "a" to "X"。写成 "a", "b" to "FC" 的话, `to` 的优先级
+        //    低于逗号, Kotlin 解析成 listOf("a", ("b" to "FC")) —— 头一个元素是裸
+        //    String, 整个 list 退化成 List<Any>, 后面 (key, code) 解构直接编译失败。
+        //    这个坑我踩过一次, 所以每项都写全。
         listOf(
-            "fc", "nes", "红白机", "小霸王", "famicom", "nesgames" to "FC",
-            "sfc", "snes", "super famicom", "super nintendo", "超级任天堂", "超任" to "SFC",
-            "n64", "nintendo 64" to "N64",
-            "gb", "gameboy", "game boy" to "GB",
-            "gbc", "game boy color" to "GBC",
-            "gba", "game boy advance" to "GBA",
-            "nds", "ds", "nintendo ds" to "NDS",
+            "fc" to "FC", "nes" to "FC", "红白机" to "FC", "小霸王" to "FC",
+            "famicom" to "FC", "nesgames" to "FC",
+            "sfc" to "SFC", "snes" to "SFC", "super famicom" to "SFC",
+            "super nintendo" to "SFC", "超级任天堂" to "SFC", "超任" to "SFC",
+            "n64" to "N64", "nintendo 64" to "N64",
+            "gb" to "GB", "gameboy" to "GB", "game boy" to "GB",
+            "gbc" to "GBC", "game boy color" to "GBC",
+            "gba" to "GBA", "game boy advance" to "GBA",
+            "nds" to "NDS", "ds" to "NDS", "nintendo ds" to "NDS",
             "3ds" to "3DS",
-            "md", "mdp", "genesis", "mega drive", "megadrive", "魂斗罗" to "MD",
-            "saturn", "ss", "sega saturn", "土星" to "SATURN",
-            "dc", "dreamcast", "gdrom" to "DC",
-            "ps", "ps1", "psx", "playstation", "psone" to "PS1",
-            "ps2", "playstation2" to "PS2",
-            "psp", "playstation portable", "掌机" to "PSP",
-            "wii", "wii u" to "WII",
-            "gc", "gamecube" to "GC",
-            "pce", "pc engine", "turbo grafx", "tg16" to "PCE",
-            "neogeo", "neo geo", "snk" to "NEOGEO",
-            "mame", "arcade", "街机", "capcom", "cps1", "cps2", "cps3" to "ARCADE",
-            "j2me", "java", "手机游戏" to "J2ME",
-            "dos", "pc" to "DOS",
-            "flash", "swf", "flash游戏" to "FLASH",
-            "html", "网页游戏", "html5" to "HTML",
-        ).forEach { (keys, code) -> keys.forEach { put(it, code) } }
+            "md" to "MD", "mdp" to "MD", "genesis" to "MD",
+            "mega drive" to "MD", "megadrive" to "MD", "魂斗罗" to "MD",
+            "saturn" to "SATURN", "ss" to "SATURN", "sega saturn" to "SATURN", "土星" to "SATURN",
+            "dc" to "DC", "dreamcast" to "DC", "gdrom" to "DC",
+            "ps" to "PS1", "ps1" to "PS1", "psx" to "PS1",
+            "playstation" to "PS1", "psone" to "PS1",
+            "ps2" to "PS2", "playstation2" to "PS2",
+            "psp" to "PSP", "playstation portable" to "PSP", "掌机" to "PSP",
+            "wii" to "WII", "wii u" to "WII",
+            "gc" to "GC", "gamecube" to "GC",
+            "pce" to "PCE", "pc engine" to "PCE",
+            "turbo grafx" to "PCE", "tg16" to "PCE",
+            "neogeo" to "NEOGEO", "neo geo" to "NEOGEO", "snk" to "NEOGEO",
+            "mame" to "ARCADE", "arcade" to "ARCADE", "街机" to "ARCADE",
+            "capcom" to "ARCADE", "cps1" to "ARCADE", "cps2" to "ARCADE", "cps3" to "ARCADE",
+            "j2me" to "J2ME", "java" to "J2ME", "手机游戏" to "J2ME",
+            "dos" to "DOS", "pc" to "DOS",
+            "flash" to "FLASH", "swf" to "FLASH", "flash游戏" to "FLASH",
+            "html" to "HTML", "网页游戏" to "HTML", "html5" to "HTML",
+        ).forEach { (key, code) -> put(key, code) }
     }
 
     /** 全部扩展名 → 平台 (不含歧义扩展名) */

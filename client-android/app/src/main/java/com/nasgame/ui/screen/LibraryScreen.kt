@@ -3,13 +3,12 @@ package com.nasgame.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,11 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,118 +28,76 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
-import com.nasgame.data.api.Game
-import com.nasgame.data.api.Platform
-import com.nasgame.data.download.DownloadManager
+import com.nasgame.data.db.NasDb
+import com.nasgame.data.media.MediaStore
+import com.nasgame.data.model.Game
+import com.nasgame.data.model.Platform
 import com.nasgame.data.prefs.PrefsStore
-import com.nasgame.data.repo.NasGameRepo
+import com.nasgame.data.repo.LibraryRepo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
-    private val repo: NasGameRepo,
-    val prefs: PrefsStore,
-    private val downloadMgr: DownloadManager,
+    private val repo: LibraryRepo,
+    private val db: NasDb,
+    private val media: MediaStore,
+    private val prefs: PrefsStore,
 ) : ViewModel() {
     private val _games = MutableStateFlow<List<Game>>(emptyList())
     val games = _games.asStateFlow()
-    private val _platforms = MutableStateFlow<List<Platform>>(emptyList())
-    val platforms = _platforms.asStateFlow()
-    private val _selectedPlatform = MutableStateFlow<String?>(null)
-    val selectedPlatform = _selectedPlatform.asStateFlow()
+    private val _platform = MutableStateFlow<String?>(null)
+    val platform = _platform.asStateFlow()
     private val _search = MutableStateFlow("")
     val search = _search.asStateFlow()
-    private val _loading = MutableStateFlow(false)
-    val loading = _loading.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
+    private val _favOnly = MutableStateFlow(false)
+    val favOnly = _favOnly.asStateFlow()
+    private val _counts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val counts = _counts.asStateFlow()
+    private val _total = MutableStateFlow(0)
+    val total = _total.asStateFlow()
+    private val _rootPath = MutableStateFlow<String?>(null)
+    val rootPath = _rootPath.asStateFlow()
+    private val _msg = MutableStateFlow<String?>(null)
+    val msg = _msg.asStateFlow()
     private val _sort = MutableStateFlow("title")
     val sort = _sort.asStateFlow()
 
-    /** 平台级 ROM 状态: code -> (已下载, 全部) */
-    private val _localStats = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
-    val localStats = _localStats.asStateFlow()
+    init { reload(); viewModelScope.launch { _rootPath.value = prefs.romRootPath() } }
 
-    init { refresh() }
-
-    fun setPlatform(code: String?) {
-        _selectedPlatform.value = code
-        loadGames()
-    }
-
-    fun setSearch(q: String) {
-        _search.value = q
-        loadGames()
-    }
-
-    fun setSort(s: String) {
-        _sort.value = s
-        loadGames()
-    }
-
-    fun refresh() {
+    fun reload() {
         viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            try {
-                _platforms.value = repo.platforms()
-                loadGames()
-                updateLocalStats()
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-            _loading.value = false
+            _games.value = repo.query(
+                platform = _platform.value, search = _search.value,
+                favoriteOnly = _favOnly.value, sort = _sort.value, pageSize = 300,
+            )
+            _counts.value = repo.countByPlatform()
+            _total.value = repo.countAll()
         }
     }
 
-    private fun loadGames() {
+    fun setPlatform(code: String?) { _platform.value = code; reload() }
+    fun setSearch(s: String) { _search.value = s; reload() }
+    fun toggleFavOnly() { _favOnly.value = !_favOnly.value; reload() }
+    fun setSort(s: String) { _sort.value = s; reload() }
+
+    fun platforms(): List<Platform> = repo.platforms()
+
+    fun toggleFavorite(g: Game) {
         viewModelScope.launch {
-            _loading.value = true
-            try {
-                val r = repo.games(
-                    platform = _selectedPlatform.value,
-                    search = _search.value.ifBlank { null },
-                    pageSize = 200,  // 一次拉多些, 本地过滤
-                )
-                _games.value = sortGames(r.items, _sort.value)
-                updateLocalStats()
-            } catch (e: Exception) {
-                _error.value = e.message
-            }
-            _loading.value = false
+            repo.toggleFavorite(g)
+            _games.value = _games.value.map { if (it.id == g.id) it.copy(favorite = !g.favorite) else it }
         }
     }
 
-    private fun sortGames(items: List<Game>, sortBy: String): List<Game> {
-        return when (sortBy) {
-            "title" -> items.sortedBy { it.titleZh.ifBlank { it.titleEn.ifBlank { it.titleRaw } } }
-            "year_desc" -> items.sortedByDescending { it.releaseDate.take(4) }
-            "year_asc" -> items.sortedBy { it.releaseDate.take(4) }
-            "size" -> items.sortedByDescending { it.romSize }
-            else -> items
-        }
-    }
+    fun coverFile(game: Game): File? = media.pathOf(game.coverFile)
 
-    private fun updateLocalStats() {
-        viewModelScope.launch {
-            val stats = mutableMapOf<String, Pair<Int, Int>>()
-            _games.value.forEach { g ->
-                val code = g.platform?.code ?: return@forEach
-                val (have, total) = stats[code] ?: (0 to 0)
-                val newHave = if (downloadMgr.isLocal(g)) have + 1 else have
-                stats[code] = (newHave to total + 1)
-            }
-            _localStats.value = stats
-        }
-    }
-
-    fun isLocal(g: Game) = downloadMgr.isLocal(g)
-
-    fun serverUrl(): String? = kotlinx.coroutines.runBlocking { prefs.currentServer() }
+    fun say(msg: String) { _msg.value = msg }
+    fun clearMsg() { _msg.value = null }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,387 +106,227 @@ fun LibraryScreen(
     onOpenDetail: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenConnect: () -> Unit,
+    onRescan: () -> Unit,
     vm: LibraryViewModel = hiltViewModel(),
 ) {
     val games by vm.games.collectAsState()
-    val platforms by vm.platforms.collectAsState()
-    val selected by vm.selectedPlatform.collectAsState()
+    val platform by vm.platform.collectAsState()
     val search by vm.search.collectAsState()
-    val loading by vm.loading.collectAsState()
-    val error by vm.error.collectAsState()
+    val favOnly by vm.favOnly.collectAsState()
+    val counts by vm.counts.collectAsState()
+    val total by vm.total.collectAsState()
+    val rootPath by vm.rootPath.collectAsState()
     val sort by vm.sort.collectAsState()
-    val localStats by vm.localStats.collectAsState()
+    val msg by vm.msg.collectAsState()
+
+    var showSearch by remember { mutableStateOf(false) }
+    val snackHost = remember { SnackbarHostState() }
+    LaunchedEffect(msg) { msg?.let { snackHost.showSnackbar(it); vm.clearMsg() } }
+
+    val gridState = rememberLazyGridState()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackHost) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("NasGameHub", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        if (selected != null) {
-                            Text(
-                                "${platforms.find { it.code == selected }?.name ?: selected}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            )
-                        }
+                        Text("游戏库", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "$total 个游戏" + (rootPath?.let { " · $it" } ?: ""),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showSearch = !showSearch }) {
+                        Icon(Icons.Default.Search, "搜索")
+                    }
+                    IconButton(onClick = { vm.toggleFavOnly() }) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            "只看收藏",
+                            tint = if (favOnly) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                     IconButton(onClick = onOpenDownloads) {
-                        BadgedBox(badge = {
-                            val active = localStats.values.sumOf { it.first }
-                            if (active > 0) Badge { Text("$active") }
-                        }) {
-                            Icon(Icons.Default.Download, "下载管理")
-                        }
+                        Icon(Icons.Default.Download, "下载管理")
+                    }
+                    IconButton(onClick = onRescan) {
+                        Icon(Icons.Default.Refresh, "重新扫描 115")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, "设置")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
             )
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            // ===== 平台 Tab (横向滚动) =====
-            PlatformTabBar(
-                platforms = platforms,
-                selected = selected,
-                localStats = localStats,
-                onSelect = { vm.setPlatform(it) },
-            )
 
-            // ===== 搜索 + 排序 =====
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (showSearch) {
                 OutlinedTextField(
                     value = search,
                     onValueChange = { vm.setSearch(it) },
-                    placeholder = { Text("搜索游戏...") },
+                    placeholder = { Text("搜中文名 / 英文名 / 文件名") },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Default.Search, null) },
-                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(8.dp))
-                Box {
-                    var expanded by remember { mutableStateOf(false) }
-                    OutlinedButton(onClick = { expanded = true }) {
-                        Icon(Icons.Default.Sort, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(when (sort) {
-                            "title" -> "名称"
-                            "year_desc" -> "年份↓"
-                            "year_asc" -> "年份↑"
-                            "size" -> "大小"
-                            else -> "排序"
-                        }, fontSize = 13.sp)
-                    }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        listOf("title" to "名称 A-Z", "year_desc" to "年份从新到旧",
-                            "year_asc" to "年份从旧到新", "size" to "大小从大到小").forEach { (k, l) ->
-                            DropdownMenuItem(
-                                text = { Text(l) },
-                                onClick = { vm.setSort(k); expanded = false },
-                                leadingIcon = if (sort == k) {
-                                    { Icon(Icons.Default.Check, null) }
-                                } else null,
-                            )
-                        }
-                    }
+            }
+
+            // 平台筛选
+            LazyRow(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    FilterChip(
+                        selected = platform == null && !favOnly,
+                        onClick = { vm.setPlatform(null) },
+                        label = { Text("全部 ${total}") },
+                    )
+                }
+                items(vm.platforms().filter { (counts[it.code] ?: 0) > 0 }) { p ->
+                    FilterChip(
+                        selected = platform == p.code,
+                        onClick = { vm.setPlatform(if (platform == p.code) null else p.code) },
+                        label = { Text("${p.name} ${counts[p.code] ?: 0}") },
+                    )
                 }
             }
 
-            // ===== 内容区 =====
-            when {
-                loading && games.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-                error != null && games.isEmpty() -> {
-                    ErrorView(message = error!!, onRetry = vm::refresh)
-                }
-                games.isEmpty() -> {
-                    EmptyView(selected)
-                }
-                else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 130.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(games, key = { it.id }) { g ->
-                            GameCard(
-                                game = g,
-                                serverUrl = vm.serverUrl(),
-                                isLocal = vm.isLocal(g),
-                                onClick = { onOpenDetail(g.id.toLong()) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlatformTabBar(
-    platforms: List<Platform>,
-    selected: String?,
-    localStats: Map<String, Pair<Int, Int>>,
-    onSelect: (String?) -> Unit,
-) {
-    val allTotal = platforms.sumOf { it.gameCount }
-    val allHave = localStats.values.sumOf { it.first }
-
-    LazyRow(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        // 全部
-        item {
-            PlatformChip(
-                code = "*",
-                name = "全部",
-                count = allTotal,
-                have = allHave,
-                selected = selected == null,
-                onClick = { onSelect(null) },
-            )
-        }
-        items(platforms, key = { it.id }) { p ->
-            val (have, total) = localStats[p.code] ?: (0 to 0)
-            PlatformChip(
-                code = p.code,
-                name = p.name,
-                count = total.takeIf { it > 0 } ?: p.gameCount,
-                have = have,
-                selected = selected == p.code,
-                onClick = { onSelect(p.code) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlatformChip(
-    code: String,
-    name: String,
-    count: Int,
-    have: Int,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val containerColor = if (selected)
-        MaterialTheme.colorScheme.primaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = containerColor,
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                if (code == "*") "🎮" else platformEmoji(code),
-                fontSize = 16.sp,
-            )
-            Spacer(Modifier.width(6.dp))
-            Column {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    name,
+                    "${games.size} 个",
                     fontSize = 12.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                )
-                Text(
-                    if (have > 0) "$have / $count" else "$count",
-                    fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    vm.setSort(if (sort == "title") "recent" else "title")
+                }) {
+                    Text(if (sort == "title") "按名称" else "按最近玩", fontSize = 12.sp)
+                }
             }
-        }
-    }
-}
 
-private fun platformEmoji(code: String): String = when (code) {
-    "FC", "SFC" -> "🕹️"
-    "N64" -> "🎯"
-    "GBA", "GBC", "GB" -> "🎲"
-    "MD" -> "🐉"
-    "PS1", "PS2", "PSP" -> "💿"
-    "NDS", "3DS" -> "📱"
-    "WII", "GC" -> "🎮"
-    "DC" -> "💎"
-    "MAME", "ARCADE", "NEOGEO" -> "🕹️"
-    "J2ME" -> "📞"
-    else -> "🎮"
-}
-
-@Composable
-private fun GameCard(
-    game: Game,
-    serverUrl: String?,
-    isLocal: Boolean,
-    onClick: () -> Unit,
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Box {
-            Box(
-                Modifier.fillMaxWidth().aspectRatio(3f / 4f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (game.cover.isNotBlank() && serverUrl != null) {
-                    AsyncImage(
-                        model = joinUrl(serverUrl, game.cover),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(8.dp),
-                    ) {
-                        Text(
-                            game.platform?.code ?: "?",
-                            fontSize = 28.sp, fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            game.titleRaw.take(28),
-                            fontSize = 10.sp,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
+            if (games.isEmpty()) {
+                EmptyLibrary(onRescan = onRescan, hasFilter = search.isNotBlank() || platform != null)
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(112.dp),
+                    state = gridState,
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(games, key = { it.id }) { g ->
+                        GameCard(g, vm, onOpenDetail)
                     }
                 }
             }
+        }
+    }
+}
 
-            // 平台徽章 (左上)
-            Surface(
-                Modifier.padding(4.dp).align(Alignment.TopStart),
-                color = Color.Black.copy(alpha = 0.65f),
-                shape = RoundedCornerShape(4.dp),
-            ) {
-                Text(
-                    game.platform?.code ?: "?",
-                    Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
+@Composable
+private fun GameCard(g: Game, vm: LibraryViewModel, onOpen: (Long) -> Unit) {
+    Column(Modifier.clickable { onOpen(g.id) }) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(3f / 4f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            val cover = remember(g.coverFile) { vm.coverFile(g) }
+            if (cover != null) {
+                AsyncImage(
+                    model = cover,
+                    contentDescription = g.displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
                 )
-            }
-
-            // 状态徽章 (右下): 已下载/待下载/待刮削
-            val (text, bg) = when {
-                isLocal -> "✓ 本地" to MaterialTheme.colorScheme.primary
-                game.scrapeStatus == "pending" -> "待刮削" to MaterialTheme.colorScheme.tertiary
-                game.cloudSource == "115" -> "115" to Color(0xFFFF9800)
-                else -> "" to Color.Transparent
-            }
-            if (text.isNotBlank()) {
-                Surface(
-                    Modifier.padding(4.dp).align(Alignment.BottomEnd),
-                    color = bg.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(4.dp),
-                ) {
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text,
-                        Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                        color = Color.White,
-                        fontSize = 9.sp,
+                        g.platformCode,
+                        fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
+
+            // 本地已下载标记
+            if (g.isLocal) {
+                Surface(
+                    Modifier.align(Alignment.TopStart).padding(4.dp),
+                    color = Color(0xFF2E7D32),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text("⬇ 本地", Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        color = Color.White, fontSize = 9.sp)
+                }
+            }
+            if (g.favorite) {
+                Icon(
+                    Icons.Default.Favorite, "收藏",
+                    Modifier.align(Alignment.TopEnd).padding(4.dp).size(16.dp),
+                    tint = Color(0xFFE91E63),
+                )
+            }
+            // 没刮出来的打个标
+            if (g.scrapeStatus != "done") {
+                Surface(
+                    Modifier.align(Alignment.BottomStart).padding(4.dp),
+                    color = Color(0xFFFF9800),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text("待刮削", Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        color = Color.White, fontSize = 9.sp)
+                }
+            }
         }
-        Column(Modifier.padding(8.dp)) {
-            Text(
-                game.titleZh.ifBlank { game.titleEn.ifBlank { game.titleRaw } },
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                game.titleEn.ifBlank { game.releaseDate.take(4) },
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-            )
-        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            g.displayTitle,
+            fontSize = 11.sp, lineHeight = 14.sp,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
 @Composable
-private fun EmptyView(platform: String?) {
+private fun EmptyLibrary(onRescan: () -> Unit, hasFilter: Boolean) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("📦", fontSize = 56.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (platform != null) "该平台暂无游戏" else "游戏库为空",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                if (platform != null) "在服务器端添加 ROM 或切换其他平台"
-                else "在服务器端扫描游戏目录, 然后刷新",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ErrorView(message: String, onRetry: () -> Unit) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("⚠️", fontSize = 48.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("加载失败", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                message,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 4,
-            )
+            Text(if (hasFilter) "🔍" else "📭", fontSize = 48.sp)
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, null)
-                Spacer(Modifier.width(4.dp))
-                Text("重试")
+            Text(
+                if (hasFilter) "没有匹配的游戏" else "库里还是空的",
+                fontWeight = FontWeight.Bold, fontSize = 16.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (hasFilter) "换个关键词试试"
+                else "ROM 全在 115 上, 扫描一下就能看到",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+            )
+            if (!hasFilter) {
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onRescan) { Text("去扫描 115") }
             }
         }
     }
-}
-fun joinUrl(base: String?, path: String): String? {
-    if (base == null) return null
-    if (path.startsWith("http://") || path.startsWith("https://")) return path
-    val b = base.trimEnd('/')
-    val p = if (path.startsWith("/")) path else "/$path"
-    return b + p
 }

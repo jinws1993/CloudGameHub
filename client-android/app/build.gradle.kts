@@ -3,7 +3,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
 }
@@ -16,8 +15,8 @@ android {
         applicationId = "com.nasgame"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.2.4"
+        versionCode = 10
+        versionName = "1.3.0"
 
         // Inject default server URL via build-time variable if desired
         // buildConfigField("String", "DEFAULT_SERVER", "\"http://192.168.1.100:14322\"")
@@ -76,6 +75,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.documentfile:documentfile:1.0.1")
 
@@ -87,19 +87,17 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.2")
 
-    // Coil (image loader)
+    // Coil (本地封面加载)
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // Retrofit / OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+    // HTTP: 115 webapi / libretro 缩略图 / RA 核心下载
+    // (没有 Retrofit 了 —— 不再有服务器, 全是裸 OkHttp)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Kotlinx serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.2")
+    // 115 扫码登录的二维码生成
+    implementation("com.google.zxing:core:3.5.3")
 
-    // DataStore
+    // DataStore (设置)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Coroutines
@@ -109,12 +107,6 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.52")
     ksp("com.google.dagger:hilt-android-compiler:2.52")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-
-    // WebSocket (already in OkHttp)
-    // implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // ViewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

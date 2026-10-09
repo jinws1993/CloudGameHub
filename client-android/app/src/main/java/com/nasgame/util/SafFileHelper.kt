@@ -6,39 +6,34 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * Storage Access Framework (SAF) 文件助手.
+ * SAF (Storage Access Framework) 助手。
  *
- * 用户在设置中通过系统文件选择器 [Intent.ACTION_OPEN_DOCUMENT_TREE] 选定一个目录后,
- * 我们把这个 Uri 存到 PrefsStore。后续读写 ROM 都通过 DocumentFile API 访问,
- * 不需要 WRITE_EXTERNAL_STORAGE 权限。
+ * ROM 要下到一个**模拟器读得到**的目录, 而 Android 11+ 不允许我们直接写
+ * `/sdcard/RetroArch`。所以用系统文件选择器让用户挑一个公共目录, 拿到的
+ * tree URI 长期授权, 之后用 DocumentFile 读写。
  *
- * 关键点:
- * 1. **必须 take persistable URI permission**, 否则重启后失效
- * 2. **路径不能直接拼** — 子目录用 DocumentFile.findFile 或 createDirectory 递归
- * 3. **FileProvider 仍然能工作** — content:// URI 可以喂给第三方 app (模拟器)
+ * 两个关键点:
+ * 1. **必须 take persistable permission**, 否则重启后授权就失效
+ * 2. **DocumentFile 不是 File** —— 但 tree URI 能反推回真实路径, 这对
+ *    RetroArch 至关重要 (它只认绝对路径)
  */
 object SafFileHelper {
 
-    /**
-     * 持久化用户选择的目录 URI (重启后仍有效).
-     * 必须调用一次, 否则 URI 在进程被杀后失效.
-     */
     fun persistTreePermission(ctx: Context, treeUri: Uri) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
     }
 
-    /** 检查 URI 是否仍有 persistable permission (重启后可能失效) */
     fun hasPersistedPermission(ctx: Context, treeUri: Uri): Boolean {
         val persisted = ctx.contentResolver.persistedUriPermissions
         return persisted.any { it.uri == treeUri && it.isReadPermission && it.isWritePermission }
     }
 
-    /** 释放持久化权限 */
     fun releaseTreePermission(ctx: Context, treeUri: Uri) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         try {
@@ -46,56 +41,65 @@ object SafFileHelper {
         } catch (_: Exception) {}
     }
 
-    /**
-     * 在用户选定的根目录下, 找或创建子目录路径 (e.g. ["FC", "roms"]).
-     */
-    fun findOrCreateDir(
-        ctx: Context,
-        rootTree: DocumentFile,
-        parts: List<String>,
-    ): DocumentFile {
+    fun findOrCreateDir(ctx: Context, rootTree: DocumentFile, parts: List<String>): DocumentFile {
         var current = rootTree
         for (p in parts) {
-            val next = current.findFile(p)
-            current = next ?: current.createDirectory(p)
-                ?: throw IllegalStateException("无法创建子目录: $p")
+            current = current.findFile(p) ?: current.createDirectory(p)
+                ?: throw IllegalStateException("无法创建目录: $p")
         }
         return current
     }
 
-    /** 只查目录 (不创建). 用于 isLocal() 检查 — 避免 createDirectory 副作用 */
-    fun findDir(ctx: Context, rootTree: DocumentFile, name: String): DocumentFile? {
-        return rootTree.findFile(name)?.takeIf { it.isDirectory }
-    }
+    fun findDir(rootTree: DocumentFile, name: String): DocumentFile? =
+        rootTree.findFile(name)?.takeIf { it.isDirectory }
 
-    /** 只查文件 (不创建). 用于 isLocal() 检查 — 避免 createFile 空文件副作用 */
-    fun findFile(ctx: Context, dir: DocumentFile, filename: String): DocumentFile? {
-        return dir.findFile(filename)?.takeIf { it.isFile }
-    }
-
-    /** 找或创建文件 */
     fun findOrCreateFile(
-        ctx: Context,
-        dir: DocumentFile,
-        filename: String,
-        mimeType: String = "application/octet-stream",
-    ): DocumentFile {
-        val existing = dir.findFile(filename)
-        if (existing != null) return existing
-        return dir.createFile(mimeType, filename)
+        ctx: Context, dir: DocumentFile, filename: String, mimeType: String = "application/octet-stream",
+    ): DocumentFile =
+        dir.findFile(filename) ?: dir.createFile(mimeType, filename)
             ?: throw IllegalStateException("无法创建文件: $filename")
-    }
 
-    /** 打开 SAF 文件的输入流 */
     fun openInput(ctx: Context, doc: DocumentFile): InputStream =
         ctx.contentResolver.openInputStream(doc.uri)
-            ?: throw IllegalStateException("无法打开 URI 输入流: ${doc.uri}")
+            ?: throw IllegalStateException("无法打开: ${doc.uri}")
 
-    /** 打开 SAF 文件的输出流 (truncate = true) */
+    /** @param truncate true = "wt" 截断重写, false = "wa" 追加 (断点续传用) */
     fun openOutput(ctx: Context, doc: DocumentFile, truncate: Boolean = true): OutputStream =
-        ctx.contentResolver.openOutputStream(doc.uri, if (truncate) "wt" else "w")
-            ?: throw IllegalStateException("无法打开 URI 输出流: ${doc.uri}")
+        ctx.contentResolver.openOutputStream(doc.uri, if (truncate) "wt" else "wa")
+            ?: throw IllegalStateException("无法打开输出流: ${doc.uri}")
 
-    /** 把 SAF 文件转成 content:// URI 喂给第三方 (模拟器) */
     fun toShareableUri(doc: DocumentFile): Uri = doc.uri
+
+    /**
+     * tree URI → 真实文件系统路径。
+     *
+     * `primary:Download/NasGameHub` → `/storage/emulated/0/Download/NasGameHub`
+     * `1A2B-3C4D:Download/X`        → `/storage/1A2B-3C4D/Download/X`
+     *
+     * @return 真实路径; 推不出来 (SD 卡 / 特殊 provider) 返回 null
+     */
+    fun treeUriToPath(treeUri: Uri): String? = try {
+        val docId = DocumentsContract.getTreeDocumentId(treeUri) ?: return null
+        val colon = docId.indexOf(':')
+        if (colon <= 0) return null
+        val volume = docId.substring(0, colon)
+        val rest = docId.substring(colon + 1)
+        val root = if (volume.equals("primary", true)) "/storage/emulated/0" else "/storage/$volume"
+        val path = if (rest.isBlank()) root else "$root/$rest"
+        File(path).takeIf { it.exists() }?.absolutePath
+    } catch (_: Exception) {
+        null
+    }
+
+    /** SAF 目录里某个文件的真实路径; 拿不到返回 null */
+    fun fileRealPath(treeUri: Uri, vararg pathSegments: String): String? {
+        val root = treeUriToPath(treeUri) ?: return null
+        val full = File(root, pathSegments.joinToString("/"))
+        return if (full.exists()) full.absolutePath else null
+    }
+
+    /** 给 FileProvider 用的 content:// (给只认 content:// 的模拟器) */
+    fun uriFor(ctx: Context, file: File): Uri = runCatching {
+        FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
+    }.getOrElse { Uri.fromFile(file) }
 }

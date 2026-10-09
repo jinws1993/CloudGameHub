@@ -2,7 +2,11 @@ package com.nasgame.data.prefs
 
 import android.content.Context
 import android.net.Uri
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -13,199 +17,235 @@ import javax.inject.Singleton
 
 private val Context.dataStore by preferencesDataStore(name = "nasgame")
 
+/**
+ * 全部设置都在手机本地。**不再有服务器地址、没有登录 token、没有 JWT。**
+ *
+ * 唯一的"凭证"是 115 的 cookie —— 它只存在这台手机上, 不上传任何地方。
+ */
 @Singleton
 class PrefsStore @Inject constructor(@ApplicationContext private val ctx: Context) {
 
-    private val SERVER = stringPreferencesKey("server_url")
-    private val LAST_SERVER = stringPreferencesKey("last_server_url")
-    private val TOKEN = stringPreferencesKey("token")
-    private val USER = stringPreferencesKey("username")
-    private val SAVED_PASSWORD = stringPreferencesKey("saved_password")
-    private val REMEMBER_ME = booleanPreferencesKey("remember_me")
-    private val EMU_PREFIX = "emu_pkg_"
-    private val CONCURRENT_DOWNLOADS = intPreferencesKey("concurrent_downloads")
-    /** ROM 存储路径 — 两种形式:
-     *  - "default" → 默认 App 私有目录
-     *  - "saf:<uri>" → 用户通过 SAF 选择的目录 (Uri encoded)
-     *  - "path:/storage/emulated/0/MyRoms" → 旧的手填绝对路径 (legacy)
-     */
-    private val ROM_STORAGE_KIND = stringPreferencesKey("rom_storage_kind")
-    private val ROM_STORAGE_SAF_URI = stringPreferencesKey("rom_storage_saf_uri")
-    private val ROM_STORAGE_LEGACY_PATH = stringPreferencesKey("rom_storage_legacy_path")
-    private val GLOBAL_EMULATOR_PKG = stringPreferencesKey("global_emulator_pkg")
-    private val DEFAULT_RETROARCH_CORE = stringPreferencesKey("default_retroarch_core")
+    private val K115_COOKIE = stringPreferencesKey("cookie_115")
+    private val K115_ROOT_CID = stringPreferencesKey("root_cid_115")
+    private val K115_ROOT_PATH = stringPreferencesKey("root_path_115")
+    private val K115_SCAN_DEPTH = intPreferencesKey("scan_depth_115")
+    private val K115_SCAN_ALL = booleanPreferencesKey("scan_all_ext")
 
-    val serverUrl: Flow<String?> = ctx.dataStore.data.map { it[SERVER] }
-    val token: Flow<String?> = ctx.dataStore.data.map { it[TOKEN] }
-    val username: Flow<String?> = ctx.dataStore.data.map { it[USER] }
+    private val K_AI_ENABLED = booleanPreferencesKey("ai_enabled")
+    private val K_AI_BASE = stringPreferencesKey("ai_base_url")
+    private val K_AI_KEY = stringPreferencesKey("ai_api_key")
+    private val K_AI_MODEL = stringPreferencesKey("ai_model")
 
-    suspend fun currentServer(): String? = ctx.dataStore.data.first()[SERVER]
-    suspend fun currentToken(): String? = ctx.dataStore.data.first()[TOKEN]
+    private val K_ROM_KIND = stringPreferencesKey("rom_storage_kind")
+    private val K_ROM_SAF = stringPreferencesKey("rom_storage_saf_uri")
+    private val K_ROM_LEGACY = stringPreferencesKey("rom_storage_legacy_path")
+    private val K_CONCURRENT = intPreferencesKey("concurrent_downloads")
 
-    /** 上次连接的服务器地址 (不论登录状态, 总是记住) */
-    suspend fun lastServerUrl(): String? = ctx.dataStore.data.first()[LAST_SERVER]
-    suspend fun rememberLastServer(url: String) {
-        ctx.dataStore.edit { it[LAST_SERVER] = url }
+    private val K_RA_PKG = stringPreferencesKey("ra_package")
+    private val K_RA_AUTO_CORE = booleanPreferencesKey("ra_auto_core")
+    private val K_RA_CORE_OV_PREFIX = "ra_core_ov_"
+
+    private val K_EMU_PREFIX = "emu_pkg_"
+    private val K_GLOBAL_EMU = stringPreferencesKey("global_emulator_pkg")
+    private val K_SCAN_AUTO_SCRAPE = booleanPreferencesKey("scan_auto_scrape")
+
+    val flow115Cookie: Flow<Boolean> = ctx.dataStore.data.map { !it[K115_COOKIE].isNullOrBlank() }
+
+    // ==================== 115 ====================
+
+    suspend fun cached115Cookie(): String? = ctx.dataStore.data.first()[K115_COOKIE]
+
+    suspend fun save115Cookie(cookie: String) {
+        ctx.dataStore.edit { it[K115_COOKIE] = cookie }
     }
 
-    /** 记住密码 (仅当勾选时才存储, 明文存在 DataStore) */
-    suspend fun savedPassword(): String? = ctx.dataStore.data.first()[SAVED_PASSWORD]
-    suspend fun isRememberMe(): Boolean = ctx.dataStore.data.first()[REMEMBER_ME] ?: false
-    suspend fun setRememberMe(remember: Boolean, password: String?) {
+    suspend fun clear115Cookie() {
+        ctx.dataStore.edit { it.remove(K115_COOKIE) }
+    }
+
+    /** 用户选定的 ROM 根目录 (115 里的 cid + 显示路径) */
+    suspend fun romRootCid(): String? = ctx.dataStore.data.first()[K115_ROOT_CID]
+
+    suspend fun romRootPath(): String? = ctx.dataStore.data.first()[K115_ROOT_PATH]
+
+    suspend fun setRomRoot(cid: String, path: String) {
         ctx.dataStore.edit {
-            if (remember && !password.isNullOrBlank()) {
-                it[SAVED_PASSWORD] = password
-                it[REMEMBER_ME] = true
-            } else {
-                it.remove(SAVED_PASSWORD)
-                it[REMEMBER_ME] = false
-            }
+            it[K115_ROOT_CID] = cid
+            it[K115_ROOT_PATH] = path
         }
     }
 
-    suspend fun saveLogin(server: String, token: String, username: String, remember: Boolean, password: String?) {
-        ctx.dataStore.edit {
-            it[SERVER] = server
-            it[LAST_SERVER] = server
-            it[TOKEN] = token
-            it[USER] = username
-            it[REMEMBER_ME] = remember
-            if (remember && !password.isNullOrBlank()) it[SAVED_PASSWORD] = password
-            else it.remove(SAVED_PASSWORD)
-        }
+    suspend fun scanDepth(): Int = ctx.dataStore.data.first()[K115_SCAN_DEPTH] ?: 5
+
+    suspend fun setScanDepth(n: Int) {
+        ctx.dataStore.edit { it[K115_SCAN_DEPTH] = n.coerceIn(1, 10) }
     }
 
-    suspend fun clearLogin() {
-        ctx.dataStore.edit {
-            it.remove(SERVER); it.remove(TOKEN); it.remove(USER)
-            it.remove(REMEMBER_ME); it.remove(SAVED_PASSWORD)
-            // LAST_SERVER 保留, 退出不抹掉
-        }
+    /** 扫描时是否把所有文件都收进来 (不只按扩展名过滤) */
+    suspend fun scanAllExtensions(): Boolean = ctx.dataStore.data.first()[K115_SCAN_ALL] ?: false
+
+    suspend fun setScanAllExtensions(on: Boolean) {
+        ctx.dataStore.edit { it[K115_SCAN_ALL] = on }
     }
 
-    suspend fun setEmulatorPkg(platform: String, pkg: String) {
-        ctx.dataStore.edit { it[stringPreferencesKey(EMU_PREFIX + platform)] = pkg }
+    // ==================== AI 刮削 ====================
+
+    suspend fun aiEnabled(): Boolean = ctx.dataStore.data.first()[K_AI_ENABLED] ?: false
+
+    suspend fun setAiEnabled(on: Boolean) {
+        ctx.dataStore.edit { it[K_AI_ENABLED] = on }
     }
 
-    suspend fun getEmulatorPkg(platform: String): String? =
-        ctx.dataStore.data.first()[stringPreferencesKey(EMU_PREFIX + platform)]
+    suspend fun aiBaseUrl(): String = ctx.dataStore.data.first()[K_AI_BASE]
+        ?: "https://api.openai.com/v1"
 
-    suspend fun allEmuPackages(): Map<String, String> {
-        val prefs = ctx.dataStore.data.first().asMap()
-        return prefs.entries
-            .filter { it.key.name.startsWith(EMU_PREFIX) }
-            .associate { it.key.name.removePrefix(EMU_PREFIX) to (it.value as String) }
+    suspend fun setAiBaseUrl(url: String) {
+        ctx.dataStore.edit { it[K_AI_BASE] = url.trim().trimEnd('/') }
     }
 
-    /** 最大并发下载数 (默认 2) */
-    suspend fun concurrentDownloads(): Int =
-        ctx.dataStore.data.first()[CONCURRENT_DOWNLOADS] ?: 2
+    suspend fun aiApiKey(): String = ctx.dataStore.data.first()[K_AI_KEY] ?: ""
 
-    suspend fun setConcurrentDownloads(n: Int) {
-        ctx.dataStore.edit { it[CONCURRENT_DOWNLOADS] = n }
+    suspend fun setAiApiKey(key: String) {
+        ctx.dataStore.edit { it[K_AI_KEY] = key }
     }
 
-    // ============ ROM 存储路径 (SAF 模式) ============
+    suspend fun aiModel(): String = ctx.dataStore.data.first()[K_AI_MODEL] ?: "gpt-4o-mini"
+
+    suspend fun setAiModel(model: String) {
+        ctx.dataStore.edit { it[K_AI_MODEL] = model.trim() }
+    }
+
+    /** API key 的显示值 (打码) */
+    suspend fun aiApiKeyMasked(): String {
+        val k = aiApiKey()
+        return if (k.isBlank()) "" else "•".repeat(minOf(8, k.length)) + k.takeLast(4)
+    }
+
+    // ==================== ROM 存放位置 ====================
 
     enum class RomStorageKind { DEFAULT, SAF, LEGACY_PATH }
 
-    /** 当前的 ROM 存储方式 */
     suspend fun romStorageKind(): RomStorageKind {
-        val v = ctx.dataStore.data.first()[ROM_STORAGE_KIND] ?: RomStorageKind.DEFAULT.name
-        return runCatching { RomStorageKind.valueOf(v) }.getOrDefault(RomStorageKind.DEFAULT)
+        val v = ctx.dataStore.data.first()[K_ROM_KIND] ?: RomStorageKind.SAF.name
+        return runCatching { RomStorageKind.valueOf(v) }.getOrDefault(RomStorageKind.SAF)
     }
 
-    /** 设置为 SAF (用户选目录) */
     suspend fun setSafStorage(uri: Uri) {
         ctx.dataStore.edit {
-            it[ROM_STORAGE_KIND] = RomStorageKind.SAF.name
-            it[ROM_STORAGE_SAF_URI] = uri.toString()
+            it[K_ROM_KIND] = RomStorageKind.SAF.name
+            it[K_ROM_SAF] = uri.toString()
         }
     }
 
-    /** 设置为 legacy path (兼容老配置) */
     suspend fun setLegacyPath(path: String) {
         ctx.dataStore.edit {
-            it[ROM_STORAGE_KIND] = RomStorageKind.LEGACY_PATH.name
-            it[ROM_STORAGE_LEGACY_PATH] = path
+            it[K_ROM_KIND] = RomStorageKind.LEGACY_PATH.name
+            it[K_ROM_LEGACY] = path
         }
     }
 
-    /** 重置为默认 */
     suspend fun resetToDefault() {
         ctx.dataStore.edit {
-            it[ROM_STORAGE_KIND] = RomStorageKind.DEFAULT.name
-            it.remove(ROM_STORAGE_SAF_URI)
-            it.remove(ROM_STORAGE_LEGACY_PATH)
+            it[K_ROM_KIND] = RomStorageKind.DEFAULT.name
+            it.remove(K_ROM_SAF); it.remove(K_ROM_LEGACY)
         }
     }
 
-    /** SAF 选中的目录 URI (字符串) */
-    suspend fun romStorageSafUri(): String? =
-        ctx.dataStore.data.first()[ROM_STORAGE_SAF_URI]
+    suspend fun romStorageSafUri(): String? = ctx.dataStore.data.first()[K_ROM_SAF]
 
-    /** Legacy 路径 */
-    suspend fun romStorageLegacyPath(): String? =
-        ctx.dataStore.data.first()[ROM_STORAGE_LEGACY_PATH]
+    suspend fun romStorageLegacyPath(): String? = ctx.dataStore.data.first()[K_ROM_LEGACY]
 
-    /**
-     * 当前 ROM 存储的"显示描述" (用于 UI).
-     * - DEFAULT → "<app-external>/roms (卸载自动清理)"
-     * - SAF → 友好的树路径 (从 Uri 推断)
-     * - LEGACY_PATH → 原始路径
-     */
+    /** 设置页展示用 */
     suspend fun romStorageDisplay(): String = when (romStorageKind()) {
-        RomStorageKind.DEFAULT -> "默认 (App 私有): ${defaultRomStoragePath()}"
-        RomStorageKind.SAF -> romStorageSafUri()?.let { humanizeSafUri(it) }
-            ?: "未知 SAF 目录"
-        RomStorageKind.LEGACY_PATH -> romStorageLegacyPath() ?: "(未知)"
+        RomStorageKind.DEFAULT -> "App 私有目录 ($defaultRomStoragePath())\n注意: RetroArch 读不到, 需要换个公共目录"
+        RomStorageKind.SAF -> romStorageSafUri()?.let { humanizeSafUri(it) } ?: "未选择"
+        RomStorageKind.LEGACY_PATH -> romStorageLegacyPath() ?: "未设置"
     }
 
-    /** 默认 ROM 存储根路径 (App 私有 external — 卸载自动清理) */
     fun defaultRomStoragePath(): String {
         val ext = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         return ext.absolutePath + "/roms"
     }
 
-    /** 把 SAF Uri 转成人能看懂的描述 (e.g. "主存储/Download/MyRoms") */
     private fun humanizeSafUri(uriStr: String): String {
-        // tree/primary:Documents/MyRoms → "主存储/Documents/MyRoms"
-        // tree/XXXX-XXXX:Downloads/sub → "SD卡/Downloads/sub"
         return try {
             val uri = Uri.parse(uriStr)
-            val path = uri.path?.removePrefix("/tree/")?.replace(":", "/") ?: uri.toString()
-            // 找 primary 标识
-            val parts = path.split("/").drop(1) // drop "tree"
+            val path = uri.path?.removePrefix("/tree/")?.replace(":", "/") ?: uriStr
             val isPrimary = path.contains("primary:")
-            val root = if (isPrimary) "主存储" else parts.firstOrNull()?.uppercase() ?: "外部存储"
+            val parts = path.split("/").drop(1)
+            val root = if (isPrimary) "主存储" else (parts.firstOrNull()?.uppercase() ?: "外部存储")
             val sub = parts.drop(1).joinToString("/")
-            if (sub.isBlank()) root else "$root/$sub"
+            val pretty = if (sub.isBlank()) root else "$root/$sub"
+            val real = com.nasgame.util.SafFileHelper.treeUriToPath(uri)
+            if (real != null) "$pretty\n$real" else pretty
         } catch (_: Exception) {
             uriStr
         }
     }
 
-    /**
-     * 全局模拟器包名 — 优先级最高的 fallback (例如设置 RetroArch 包名后, 所有平台优先用它)
-     */
-    suspend fun globalEmulatorPkg(): String? =
-        ctx.dataStore.data.first()[GLOBAL_EMULATOR_PKG]
+    // ==================== 下载 ====================
 
-    suspend fun setGlobalEmulatorPkg(pkg: String?) {
-        ctx.dataStore.edit {
-            if (pkg.isNullOrBlank()) it.remove(GLOBAL_EMULATOR_PKG)
-            else it[GLOBAL_EMULATOR_PKG] = pkg
-        }
+    suspend fun concurrentDownloads(): Int = ctx.dataStore.data.first()[K_CONCURRENT] ?: 1
+
+    suspend fun setConcurrentDownloads(n: Int) {
+        ctx.dataStore.edit { it[K_CONCURRENT] = n.coerceIn(1, 4) }
     }
 
-    /** RetroArch 默认 core (例如 "nestopia_libretro.so" for FC) */
-    suspend fun defaultRetroArchCore(): String? =
-        ctx.dataStore.data.first()[DEFAULT_RETROARCH_CORE]
+    suspend fun lastDownloadId(): Long = ctx.dataStore.data.first()[longPreferencesKey("last_dl_id")] ?: 0
 
-    suspend fun setDefaultRetroArchCore(core: String?) {
-        ctx.dataStore.edit {
-            if (core.isNullOrBlank()) it.remove(DEFAULT_RETROARCH_CORE)
-            else it[DEFAULT_RETROARCH_CORE] = core
-        }
+    // ==================== 模拟器 ====================
+
+    suspend fun raPackage(): String? = ctx.dataStore.data.first()[K_RA_PKG]
+
+    suspend fun setRaPackage(pkg: String?) {
+        ctx.dataStore.edit { if (pkg.isNullOrBlank()) it.remove(K_RA_PKG) else it[K_RA_PKG] = pkg }
+    }
+
+    suspend fun raAutoInstallCore(): Boolean = ctx.dataStore.data.first()[K_RA_AUTO_CORE] ?: true
+
+    suspend fun setRaAutoInstallCore(on: Boolean) {
+        ctx.dataStore.edit { it[K_RA_AUTO_CORE] = on }
+    }
+
+    suspend fun raCoreOverride(platform: String): String? =
+        ctx.dataStore.data.first()[stringPreferencesKey(K_RA_CORE_OV_PREFIX + platform.uppercase())]
+
+    suspend fun setRaCoreOverride(platform: String, core: String?) {
+        val key = stringPreferencesKey(K_RA_CORE_OV_PREFIX + platform.uppercase())
+        ctx.dataStore.edit { if (core.isNullOrBlank()) it.remove(key) else it[key] = core }
+    }
+
+    suspend fun allRaCoreOverrides(): Map<String, String> =
+        ctx.dataStore.data.first().asMap()
+            .filter { it.key.name.startsWith(K_RA_CORE_OV_PREFIX) }
+            .mapNotNull { e -> (e.value as? String)?.let { e.key.name.removePrefix(K_RA_CORE_OV_PREFIX) to it } }
+            .filter { it.second.isNotBlank() }
+            .toMap()
+
+    suspend fun setEmulatorPkg(platform: String, pkg: String?) {
+        val key = stringPreferencesKey(K_EMU_PREFIX + platform.uppercase())
+        ctx.dataStore.edit { if (pkg.isNullOrBlank()) it.remove(key) else it[key] = pkg }
+    }
+
+    suspend fun getEmulatorPkg(platform: String): String? =
+        ctx.dataStore.data.first()[stringPreferencesKey(K_EMU_PREFIX + platform.uppercase())]
+
+    suspend fun globalEmulatorPkg(): String? = ctx.dataStore.data.first()[K_GLOBAL_EMU]
+
+    suspend fun setGlobalEmulatorPkg(pkg: String?) {
+        ctx.dataStore.edit { if (pkg.isNullOrBlank()) it.remove(K_GLOBAL_EMU) else it[K_GLOBAL_EMU] = pkg }
+    }
+
+    // ==================== 扫描 ====================
+
+    suspend fun autoScrapeAfterScan(): Boolean = ctx.dataStore.data.first()[K_SCAN_AUTO_SCRAPE] ?: true
+
+    suspend fun setAutoScrapeAfterScan(on: Boolean) {
+        ctx.dataStore.edit { it[K_SCAN_AUTO_SCRAPE] = on }
+    }
+
+    /** 一次性清空全部设置 (换账号 / 重置用) */
+    suspend fun resetAll() {
+        ctx.dataStore.edit { it.clear() }
     }
 }

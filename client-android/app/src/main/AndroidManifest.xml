@@ -9,9 +9,53 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      Android 11 (API 30) 起默认看不到别的 app。
+      不写这个块的话 getPackageInfo("com.retroarch") 一律返回 NameNotFound,
+      于是"检测不到 RetroArch" —— 这正是老版本客户端跑不起模拟器的头号原因。
+      写了不给用户任何额外权限, 只是让包可见。
+    -->
+    <queries>
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.ra32" />
+        <package android:name="org.libretro.ra2" />
+        <package android:name="org.fdroid.retroarch" />
+
+        <package android:name="org.ppsspp.ppsspp" />
+        <package android:name="org.ppsspp.ppssppgold" />
+        <package android:name="xyz.aethersx2" />
+        <package android:name="com.alyx.arp" />
+        <package android:name="com.flycastEmu.flycast" />
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.mupen64plusae.pro" />
+        <package android:name="com.drastic" />
+        <package android:name="com.explusalpha.Snes9xPlus" />
+        <package android:name="com.explusalpha.GbcEmulator" />
+        <package android:name="com.explusalpha.MdEmulator" />
+        <package android:name="com.explusalpha.MameEmu" />
+        <package android:name="org.citra.citra_emu" />
+        <package android:name="io.github.lime3ds.android" />
+        <package android:name="com.github.stenzek.duckstation" />
+        <package android:name="com.frodo.nes" />
+        <package android:name="com.nostalgia.nes" />
+        <package android:name="com.dosbox" />
+        <package android:name="com.x2x3s.sse" />
+        <package android:name="org.j2me_loader" />
+
+        <!-- RetroArch 两种入口: component 直达 + 它注册的 action -->
+        <intent>
+            <action android:name="org.libretro.android.action.LOAD_CONTENT" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".App"
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -23,13 +67,21 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.NASGame">
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.NASGame"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!--
+          给只认 content:// 的模拟器 (AetherSX2 / PPSSPP / DraStic) 喂 ROM。
+          注意 external-path 暴露的是整个外部存储, 这是给第三方 app 读 ROM 的
+          必要代价 —— 真正敏感的是 app 私有目录, 那部分 external-files-path
+          只覆盖 <app>/files 一级。
+        -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

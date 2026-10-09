@@ -1,11 +1,10 @@
 package com.nasgame.ui.screen
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,184 +30,169 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
-import com.nasgame.data.api.Game
+import com.nasgame.data.db.NasDb
 import com.nasgame.data.download.DownloadManager
-import com.nasgame.data.download.DownloadProgress
-import com.nasgame.data.download.RomSource
+import com.nasgame.data.media.MediaStore
+import com.nasgame.data.model.Game
+import com.nasgame.data.play.PlayCoordinator
 import com.nasgame.data.prefs.PrefsStore
-import com.nasgame.data.repo.NasGameRepo
+import com.nasgame.data.repo.LibraryRepo
 import com.nasgame.emulator.EmulatorLauncher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class GameDetailViewModel @Inject constructor(
-    private val repo: NasGameRepo,
+    private val repo: LibraryRepo,
+    private val db: NasDb,
+    private val media: MediaStore,
     private val prefs: PrefsStore,
+    private val play: PlayCoordinator,
     private val downloadMgr: DownloadManager,
 ) : ViewModel() {
+
     private val _game = MutableStateFlow<Game?>(null)
     val game = _game.asStateFlow()
-    private val _progress = MutableStateFlow<DownloadProgress?>(null)
-    val progress = _progress.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy = _busy.asStateFlow()
     private val _msg = MutableStateFlow<String?>(null)
     val msg = _msg.asStateFlow()
-    private val _isLocal = MutableStateFlow(false)
-    val isLocal = _isLocal.asStateFlow()
-    private val _romSource = MutableStateFlow(RomSource.UNKNOWN)
-    val romSource = _romSource.asStateFlow()
+    private val _emulator = MutableStateFlow<String?>(null)
+    val emulator = _emulator.asStateFlow()
+    private val _core = MutableStateFlow<String?>(null)
+    val core = _core.asStateFlow()
+    private val _phase = MutableStateFlow<String?>(null)   // 下载/准备核心 的阶段提示
+    val phase = _phase.asStateFlow()
+
+    val progress = downloadMgr.active
 
     fun load(id: Long) {
         viewModelScope.launch {
+            val g = repo.game(id) ?: run { _msg.value = "游戏不存在"; return@launch }
+            _game.value = g
+            _emulator.value = play.emulatorPackage(g)
+            _core.value = play.retroArchManager().resolveCore(g.platformCode)
+        }
+    }
+
+    fun coverFile(): java.io.File? = _game.value?.let { media.pathOf(it.coverFile) }
+
+    // ==================== 游玩 ====================
+
+    /**
+     * 🎮 游玩。整个 App 的主路径:
+     * 本地有 → 直接开; 没有 → 从 115 下, 下完自动开。
+     */
+    fun play(ctx: Context) {
+        val g = _game.value ?: return
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
             try {
-                val g = repo.game(id)
-                _game.value = g
-                _isLocal.value = downloadMgr.isLocal(g)
-                _romSource.value = downloadMgr.probeSource(repo.apiService, g)
+                when (val r = play.play(ctx, g)) {
+                    is PlayCoordinator.Result.Launched -> {
+                        _msg.value = "已启动 ${r.pkg}"
+                        _game.value = repo.game(g.id) ?: g
+                    }
+                    is PlayCoordinator.Result.Downloading -> {
+                        _phase.value = "正在从 115 下载…"
+                        _msg.value = "开始下载, 下完自动开玩"
+                    }
+                    is PlayCoordinator.Result.AlreadyDownloading -> {
+                        _phase.value = "正在下载中…"
+                    }
+                    is PlayCoordinator.Result.NoLocalRom -> _msg.value = "本地没找到 ROM"
+                    is PlayCoordinator.Result.NoEmulator -> _msg.value = r.hint
+                    is PlayCoordinator.Result.MissingCore ->
+                        _msg.value = "缺核心 (${r.core}). 去设置 → RetroArch 集成 里装"
+                    is PlayCoordinator.Result.UnreachablePath -> _msg.value = r.reason
+                    is PlayCoordinator.Result.Error -> _msg.value = r.message
+                }
             } catch (e: Exception) {
-                _msg.value = e.message
+                _msg.value = "出错了: ${e.message}"
+            } finally {
+                _busy.value = false
             }
         }
     }
 
-    fun serverUrl(): String? = kotlinx.coroutines.runBlocking { prefs.currentServer() }
+    /** 下载完成后由 UI 调, 继续启动 */
+    fun launchAfterDownload(ctx: Context) {
+        val g = _game.value ?: return
+        viewModelScope.launch {
+            _phase.value = null
+            when (val r = play.launchLocal(ctx, g)) {
+                is PlayCoordinator.Result.Launched -> {
+                    _msg.value = "已启动 ${r.pkg}"
+                    _game.value = repo.game(g.id) ?: g
+                }
+                is PlayCoordinator.Result.Error -> _msg.value = r.message
+                is PlayCoordinator.Result.UnreachablePath -> _msg.value = r.reason
+                is PlayCoordinator.Result.MissingCore -> _msg.value = "缺核心: ${r.core}"
+                is PlayCoordinator.Result.NoEmulator -> _msg.value = r.hint
+                else -> _msg.value = "还是起不来, 检查一下模拟器和 ROM 目录"
+            }
+        }
+    }
+
+    fun cancelDownload() {
+        _game.value?.let { downloadMgr.cancel(it.id) }
+        clearPhase()
+    }
+
+    fun clearPhase() { _phase.value = null }
+
+    fun deleteLocal() {
+        val g = _game.value ?: return
+        viewModelScope.launch {
+            downloadMgr.deleteLocal(g)
+            _game.value = repo.game(g.id) ?: g.copy(localPath = "", localSize = 0)
+            _msg.value = "已删除本地 ROM"
+        }
+    }
 
     fun toggleFav() {
         val g = _game.value ?: return
         viewModelScope.launch {
-            try { _game.value = g.copy(favorite = repo.toggleFav(g.id.toLong())) } catch (_: Exception) {}
+            repo.toggleFavorite(g)
+            _game.value = repo.game(g.id) ?: g
         }
     }
 
-    /** 核心: 下载 + 启动 (智能选择路径) */
-    fun downloadAndLaunch(ctx: Context) {
+    fun rescrape() {
         val g = _game.value ?: return
         viewModelScope.launch {
             _busy.value = true
-            _progress.value = null
-            try {
-                val platCode = g.platform?.code ?: "misc"
-                val romFile = downloadMgr.romCacheDir(platCode).resolve(g.romFilename)
-
-                // 1. 本地已有完整 ROM → 直接启动
-                if (downloadMgr.isLocal(g)) {
-                    launchEmulator(ctx, platCode, romFile, g)
-                    return@launch
-                }
-
-                // 2. 下载 (走 115 CDN 或服务器本地流)
-                _msg.value = "开始下载: ${g.romFilename}"
-                downloadMgr.startDownload(repo.apiService, g) { file ->
-                    if (file != null && file.exists()) {
-                        // 下载完成 → 启动模拟器
-                        viewModelScope.launch {
-                            _isLocal.value = true
-                            launchEmulator(ctx, platCode, file, g)
-                        }
-                    }
-                }
-
-                // 3. 监听下载进度 (轮询 active map)
-                launch {
-                    downloadMgr.active.collect { map ->
-                        _progress.value = map[g.id.toLong()]
-                    }
-                }
-            } catch (e: Exception) {
-                _msg.value = "失败: ${e.message}"
-            } finally {
-                // 注意: 不要置 false, 因为下载是后台跑的. 详情页退出后下载继续
-            }
+            val r = repo.rescrape(g)
+            _busy.value = false
+            _game.value = repo.game(g.id) ?: g
+            _msg.value = if (r.ok) "重新刮削完成 (${r.source})" else "这次还是没认出来"
         }
     }
 
-    /** 只下载, 不启动 (供用户提前批量) */
-    fun downloadOnly() {
+    /** 用户手动上传封面 */
+    fun uploadCover(ctx: Context, uri: Uri) {
         val g = _game.value ?: return
         viewModelScope.launch {
-            try {
-                if (!downloadMgr.isLocal(g)) {
-                    _msg.value = "已加入下载队列: ${g.romFilename}"
-                    downloadMgr.startDownload(repo.apiService, g)
-                    launch {
-                        downloadMgr.active.collect { map ->
-                            _progress.value = map[g.id.toLong()]
-                        }
-                    }
-                } else {
-                    _msg.value = "本地已有, 无需下载"
-                }
-            } catch (e: Exception) {
-                _msg.value = "失败: ${e.message}"
-            }
+            _busy.value = true
+            val ok = runCatching {
+                val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: return@runCatching false
+                repo.setManualCover(g, bytes, "jpg")
+            }.getOrDefault(false)
+            _busy.value = false
+            _game.value = repo.game(g.id) ?: g
+            _msg.value = if (ok) "封面已更新" else "封面上传失败"
         }
     }
 
-    /** 删除本地 ROM */
-    fun deleteLocal() {
-        val g = _game.value ?: return
-        val f = downloadMgr.romCacheDir(g.platform?.code ?: "misc").resolve(g.romFilename)
-        if (f.exists()) {
-            f.delete()
-            _isLocal.value = false
-            _msg.value = "已删除本地 ROM"
-        } else {
-            _msg.value = "本地无 ROM"
-        }
-    }
-
-    /** 直接启动本地 ROM (不重新下载) */
-    fun launchLocal(ctx: Context) {
-        val g = _game.value ?: return
-        val platCode = g.platform?.code ?: "misc"
-        val romFile = downloadMgr.romCacheDir(platCode).resolve(g.romFilename)
-        if (!romFile.exists()) {
-            _msg.value = "本地无 ROM, 请先下载"
-            return
-        }
-        viewModelScope.launch {
-            launchEmulator(ctx, platCode, romFile, g)
-        }
-    }
-
-    private suspend fun launchEmulator(ctx: Context, platCode: String, romFile: File, g: Game) {
-        val pkg = prefs.getEmulatorPkg(platCode)
-        val globalPkg = prefs.globalEmulatorPkg()
-        val raCore = prefs.defaultRetroArchCore()
-
-        // 优先级: 平台级 → 全局模拟器 → 已知 KNOWN_PACKAGES 自动检测
-        val resolvedPkg = EmulatorLauncher.resolvePackage(ctx, platCode, pkg, globalPkg)
-        if (resolvedPkg == null) {
-            val tried = listOfNotNull(pkg, globalPkg).joinToString(", ").ifBlank { "(无配置)" }
-            _msg.value = "未找到可用模拟器 (尝试了: $tried). 请在设置配置 RetroArch 包名 (推荐 com.retroarch) 或单个平台模拟器"
-            return
-        }
-
-        // SAF 模式下 romFile 是本地 mirror, URI 来自 SAF
-        val uri = downloadMgr.localUri(ctx, g) ?: Uri.fromFile(romFile)
-        val launched = EmulatorLauncher.launch(ctx, resolvedPkg, uri, romFile.absolutePath, raCore)
-        if (launched) {
-            try { repo.playLocal(g.id.toLong()) } catch (_: Exception) {}
-            _msg.value = "已启动 $resolvedPkg"
-        } else {
-            // fallback: 通用 VIEW intent
-            try {
-                val i = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(Uri.fromFile(romFile), "*/*")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                ctx.startActivity(i)
-                _msg.value = "已用通用方式启动"
-            } catch (_: ActivityNotFoundException) {
-                _msg.value = "未找到可启动的模拟器"
-            }
-        }
+    fun installRetroArch(ctx: Context) {
+        val ra = play.retroArchManager()
+        if (ra.openInstallPage()) _msg.value = "已跳转下载页, 装完回来刷新"
+        else _msg.value = "打不开下载页, 请手动去 retroarch.com"
     }
 }
 
@@ -217,36 +201,69 @@ class GameDetailViewModel @Inject constructor(
 fun GameDetailScreen(
     gameId: Long,
     onBack: () -> Unit,
-    onStream: () -> Unit,
     vm: GameDetailViewModel = hiltViewModel(),
 ) {
     val ctx = LocalContext.current
     LaunchedEffect(gameId) { vm.load(gameId) }
+
     val g by vm.game.collectAsState()
-    val progress by vm.progress.collectAsState()
     val busy by vm.busy.collectAsState()
     val msg by vm.msg.collectAsState()
-    val isLocal by vm.isLocal.collectAsState()
-    val romSource by vm.romSource.collectAsState()
+    val emulator by vm.emulator.collectAsState()
+    val core by vm.core.collectAsState()
+    val phase by vm.phase.collectAsState()
+    val progress by vm.progress.collectAsState()
 
-    LaunchedEffect(msg) { msg?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show() } }
+    val snackHost = remember { SnackbarHostState() }
+    LaunchedEffect(msg) { msg?.let { snackHost.showSnackbar(it) } }
+
+    // 手动上传封面的文件选择器
+    val pickCover = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { vm.uploadCover(ctx, it) } }
+
+    // 下载进度: 完成就自动启动
+    val myProgress = progress[gameId]
+    LaunchedEffect(myProgress?.done, myProgress?.error) {
+        val p = myProgress ?: return@LaunchedEffect
+        when {
+            p.error != null -> {
+                Toast.makeText(ctx, p.error, Toast.LENGTH_LONG).show()
+                vm.clearPhase()
+            }
+            p.done -> {
+                vm.load(gameId)
+                Toast.makeText(ctx, "下载完成, 正在启动…", Toast.LENGTH_SHORT).show()
+                vm.launchAfterDownload(ctx)
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackHost) },
         topBar = {
             TopAppBar(
-                title = { Text(g?.titleZh ?: g?.titleEn ?: g?.titleRaw ?: "游戏详情", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(
+                        g?.displayTitle ?: "游戏详情",
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 17.sp,
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }
                 },
                 actions = {
-                    g?.let { game ->
-                        IconButton(onClick = vm::toggleFav) {
+                    g?.let {
+                        IconButton(onClick = { vm.toggleFav() }) {
                             Icon(
-                                if (game.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                if (it.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 "收藏",
-                                tint = if (game.favorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurface,
+                                tint = if (it.favorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurface,
                             )
                         }
+                    }
+                    IconButton(onClick = { pickCover.launch("image/*") }) {
+                        Icon(Icons.Default.Image, "换封面")
                     }
                 },
             )
@@ -261,151 +278,165 @@ fun GameDetailScreen(
         }
 
         Column(
-            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()),
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
         ) {
             // 封面 + 元数据
             Row(Modifier.padding(16.dp)) {
                 Box(
-                    Modifier.width(140.dp).aspectRatio(3f / 4f)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .clip(RoundedCornerShape(8.dp)),
+                    Modifier
+                        .width(130.dp).aspectRatio(3f / 4f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
-                    if (game.cover.isNotBlank() && vm.serverUrl() != null) {
+                    val cover = remember(game.coverFile) { vm.coverFile() }
+                    if (cover != null) {
                         AsyncImage(
-                            model = joinUrl(vm.serverUrl()!!, game.cover),
-                            null,
+                            model = cover, null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
                         )
                     } else {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(game.platform?.code ?: "?", fontSize = 32.sp, fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                game.platformCode, fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         }
                     }
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
+                    Text(
+                        game.displayTitle, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (game.titleEn.isNotBlank() && game.titleEn != game.displayTitle) {
                         Text(
-                            game.titleZh.ifBlank { game.titleEn },
-                            fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                            game.titleEn, fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                         )
-                        if (game.titleEn.isNotBlank() && game.titleZh.isNotBlank()) {
-                            Text(game.titleEn, fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text("🎮 ${game.platform?.name ?: "?"}", fontSize = 12.sp)
-                        if (game.releaseDate.isNotBlank()) Text("📅 ${game.releaseDate.take(4)}", fontSize = 12.sp)
-                        if (game.developer.isNotBlank()) Text("🎬 ${game.developer}", fontSize = 12.sp)
-                        if (game.publisher.isNotBlank()) Text("📦 ${game.publisher}", fontSize = 12.sp)
-                        if (game.genre.isNotBlank()) Text("🎯 ${game.genre}", fontSize = 12.sp)
-                        if (game.rating > 0) Text("⭐ ${"%.1f".format(game.rating)}", fontSize = 12.sp)
-                        if (game.romSize > 0) Text("💾 ${humanSize(game.romSize)}", fontSize = 12.sp)
                     }
-            }
-
-            // ROM 状态条
-            RomStatusBar(
-                isLocal = isLocal,
-                romSource = romSource,
-                cloudSource = game.cloudSource,
-                romSize = game.romSize,
-            )
-
-            // 进度条
-            val p = progress
-            if (p != null && !p.done_) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(
-                        if (p.error != null) "❌ ${p.error}" else "📥 下载中: ${p.formattedSize} (${p.formattedSpeed})",
-                        fontSize = 12.sp,
-                        color = if (p.error != null) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { p.percent },
-                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    game.platform?.let { Text("🎮 ${it.name}", fontSize = 12.sp) }
+                    if (game.releaseDate.isNotBlank()) Text("📅 ${game.releaseDate}", fontSize = 12.sp)
+                    if (game.developer.isNotBlank()) Text("🎬 ${game.developer}", fontSize = 12.sp)
+                    if (game.publisher.isNotBlank()) Text("📦 ${game.publisher}", fontSize = 12.sp)
+                    if (game.genre.isNotBlank()) Text("🎯 ${game.genre}", fontSize = 12.sp)
+                    Text("💾 ${humanSize(game.romSize)}", fontSize = 12.sp)
+                    if (game.playCount > 0) Text("▶️ 玩过 ${game.playCount} 次", fontSize = 12.sp)
                 }
             }
 
-            // 描述
+            // ROM 状态
+            RomStatusRow(
+                game = game,
+                emulator = emulator,
+                core = core,
+                onCancel = { vm.cancelDownload() },
+            )
+
+            // 下载进度
+            myProgress?.let { p ->
+                if (!p.done) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Text(
+                            "📥 ${p.formattedSize}" +
+                                if (p.formattedSpeed.isNotBlank()) " · ${p.formattedSpeed}" else "",
+                            fontSize = 12.sp,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { p.percent },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                        )
+                    }
+                }
+            }
+
             if (game.description.isNotBlank()) {
                 Surface(
                     Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(8.dp),
                 ) {
+                    Text(game.description, Modifier.padding(12.dp), fontSize = 13.sp, lineHeight = 19.sp)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ===== 主按钮 =====
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Button(
+                    onClick = { vm.play(ctx) },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    enabled = !busy && phase == null,
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(24.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        game.description,
-                        Modifier.padding(12.dp),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
+                        when {
+                            phase != null -> phase!!
+                            game.isLocal -> "▶ 开始游戏"
+                            else -> "▶ 游玩 (从 115 下载)"
+                        },
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold,
                     )
+                }
+
+                if (emulator == null) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { vm.installRetroArch(ctx) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Download, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("装 RetroArch (核心我帮你下)", fontSize = 13.sp)
+                    }
+                }
+                if (phase != null) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { vm.cancelDownload() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("取消下载", fontSize = 13.sp)
+                    }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // 主要操作
+            // 详细信息
             Column(Modifier.padding(horizontal = 16.dp)) {
-                if (isLocal) {
-                    Button(
-                        onClick = { vm.launchLocal(ctx) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("开始游戏 (本地 ROM)", fontSize = 15.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = vm::deleteLocal,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.Delete, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("删除本地 ROM")
-                    }
-                } else {
-                    Button(
-                        onClick = { vm.downloadAndLaunch(ctx) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy,
-                    ) {
-                        Icon(Icons.Default.Download, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            when (romSource) {
-                                RomSource.LOCAL -> "下载并启动"
-                                RomSource.REMOTE_115 -> "从 115 下载并启动"
-                                else -> "下载并启动"
-                            },
-                            fontSize = 15.sp,
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = vm::downloadOnly,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.Download, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("仅下载 (后台)")
-                    }
+                DetailRow("文件名", game.romFilename)
+                DetailRow("115 路径", game.pathDisplay)
+                DetailRow("平台", game.platform?.let { "${it.code} · ${it.name}" } ?: game.platformCode)
+                DetailRow("刮削来源", game.scrapeSource.ifBlank { "未刮削" })
+                game.localFile()?.let {
+                    DetailRow("本地文件", "${it.absolutePath}  (${humanSize(it.length())})")
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onStream, modifier = Modifier.padding(horizontal = 16.dp)) {
-                Icon(Icons.Default.Cast, null)
-                Spacer(Modifier.width(4.dp))
-                Text("远程串流 (实验)")
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.rescrape() }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.AutoAwesome, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("重新刮削", fontSize = 12.sp)
+                }
+                if (game.isLocal) {
+                    OutlinedButton(onClick = { vm.deleteLocal() }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Delete, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("删本地", fontSize = 12.sp)
+                    }
+                }
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -413,53 +444,60 @@ fun GameDetailScreen(
 }
 
 @Composable
-private fun RomStatusBar(
-    isLocal: Boolean,
-    romSource: RomSource,
-    cloudSource: String,
-    romSize: Long,
+private fun DetailRow(label: String, value: String) {
+    if (value.isBlank()) return
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Text(
+            label, Modifier.width(72.dp), fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+        )
+        Text(
+            value, Modifier.weight(1f), fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        )
+    }
+}
+
+@Composable
+private fun RomStatusRow(
+    game: Game,
+    emulator: String?,
+    core: String?,
+    onCancel: () -> Unit,
 ) {
-    val (text, icon, color) = when {
-        isLocal -> Triple("本地已有 ROM, 可立即启动", Icons.Default.CheckCircle, MaterialTheme.colorScheme.primary)
-        romSource == RomSource.REMOTE_115 -> Triple("115 网盘, 走 302 CDN 加速下载", Icons.Default.CloudDownload, Color(0xFFFF9800))
-        romSource == RomSource.LOCAL -> Triple("服务器本地流式下载", Icons.Default.Storage, MaterialTheme.colorScheme.tertiary)
-        else -> Triple("暂无 ROM 文件", Icons.Default.Error, MaterialTheme.colorScheme.error)
+    val realFile = game.localFile()
+    val (text, sub, icon, color) = when {
+        game.isLocal && realFile == null ->
+            "本地记录还在, 但文件被删了" to "点播放会自动重新下载" to
+                Icons.Default.Warning to Color(0xFFFF9800)
+        game.isLocal ->
+            "已下载到本机 · 点上面直接开玩" to "${humanSize(game.localSize)} · $emulator" to
+                Icons.Default.CheckCircle to MaterialTheme.colorScheme.primary
+        else ->
+            "在 115 上 · 点了才下载到手机" to
+                "预计 ${humanSize(game.romSize)}" +
+                    (emulator?.let { " · 用 $it" } ?: " · 没找到模拟器") +
+                    (if (EmulatorLauncher.isRetroArch(emulator)) " (核心 ${core ?: "待装"})" else "") to
+                Icons.Default.CloudDownload to Color(0xFF2196F3)
     }
 
     Surface(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-        color = color.copy(alpha = 0.15f),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        color = color.copy(alpha = 0.12f),
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = color)
-            Spacer(Modifier.width(8.dp))
-            Column {
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
                 Text(text, fontSize = 13.sp, color = color, fontWeight = FontWeight.Medium)
-                if (romSize > 0 && !isLocal) {
+                if (sub.isNotBlank()) {
                     Text(
-                        "预计下载: ${humanSize(romSize)}",
-                        fontSize = 11.sp,
+                        sub, fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                 }
             }
         }
     }
-}
-
-private fun humanSize(n: Long): String {
-    if (n <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    var v = n.toDouble()
-    var i = 0
-    while (v >= 1024 && i < units.size - 1) { v /= 1024; i++ }
-    return "%.1f %s".format(v, units[i])
-}
-/** Join base + path safely (handle trailing/leading slashes). */
-fun joinUrl(base: String, path: String): String {
-    if (path.startsWith("http://") || path.startsWith("https://")) return path
-    val b = base.trimEnd('/')
-    val p = if (path.startsWith("/")) path else "/$path"
-    return b + p
 }

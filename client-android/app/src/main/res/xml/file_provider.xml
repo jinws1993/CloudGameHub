@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <!-- App 私有 external 目录 (默认 ROM 位置; 别的 app 在 Android 11+ 读不到) -->
     <external-files-path name="roms" path="roms/" />
+    <!--
+      公共外部存储: 用来把 ROM 以 content:// 喂给只认 URI 的模拟器
+      (AetherSX2 / PPSSPP / DraStic)。RetroArch 走的是绝对路径, 不需要这里。
+    -->
     <external-path name="ext" path="." />
+    <files-path name="internal" path="." />
 </paths>

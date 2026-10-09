@@ -1,44 +1,24 @@
 package com.nasgame.di
 
-import com.nasgame.data.api.NasGameApi
-import com.nasgame.data.api.AuthInterceptor
-import com.nasgame.data.prefs.PrefsStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Singleton
 
+/**
+ * Hilt 模块。
+ *
+ * **已经空了** —— 这是重构留下的印记, 之前这里塞的是 Retrofit + OkHttp + 服务器
+ * 地址。现在 App 完全独立, 所有依赖都靠 @Inject constructor 构造, 不需要模块。
+ *
+ * 保留这个文件而不是删掉, 是因为以后加全局单例 (比如统一崩溃上报) 时有地方放。
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Provides @Singleton
-    fun provideJson(): Json = Json { ignoreUnknownKeys = true; isLenient = true }
-
-    @Provides @Singleton
-    fun provideOkHttp(prefs: PrefsStore): OkHttpClient =
-        OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor { kotlinx.coroutines.runBlocking { prefs.currentToken() } })
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            })
-            .build()
-
-    @Provides @Singleton
-    fun provideRetrofit(client: OkHttpClient, json: Json): Retrofit =
-        Retrofit.Builder()
-            .baseUrl("http://placeholder/")
-            .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-
-    @Provides @Singleton
-    fun provideApi(retrofit: Retrofit): NasGameApi = retrofit.create(NasGameApi::class.java)
+    @Provides
+    @Singleton
+    fun appVersionNote(): String = "1.3.0-standalone"
 }

@@ -355,7 +355,7 @@ fun SettingsScreen(
             // ================= 115 =================
             SectionCard("☁️ 115 网盘") {
                 InfoRow("状态", if (cookieSet) "已登录" else "未登录", good = cookieSet)
-                rootPath.value?.let { InfoRow("ROM 根目录", it) }
+                rootPath?.let { InfoRow("ROM 根目录", it) }
                 Spacer(Modifier.height(8.dp))
                 Row {
                     Button(onClick = onLogin115, modifier = Modifier.weight(1f)) {
